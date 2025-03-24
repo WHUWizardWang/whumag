@@ -1,0 +1,289 @@
+#include "omgqmlpolygon.h"
+
+OmgQmlPolygon::OmgQmlPolygon(QObject *parent)
+{
+    m_raster_emag2.setResImgPath(g_image_path);
+    m_raster_mamea.setResImgPath(g_image_path);
+
+    m_raster_emag2.loadFromImage(g_emag2_path);
+    m_raster_mamea.loadFromPoints(g_mamea_path);
+
+    m_lat_rsl = m_raster_emag2.latResolution();
+    m_lon_rsl = m_raster_emag2.lonResolution();
+}
+
+OmgQmlPolygon::OmgQmlPolygon(const OmgQmlPolygon &polygon)
+{
+    m_lat_rsl = polygon.m_lat_rsl;
+    m_lon_rsl = polygon.m_lon_rsl;
+    m_points = polygon.m_points;
+
+    m_raster_emag2 = polygon.m_raster_emag2;
+    m_raster_mamea = polygon.m_raster_mamea;
+}
+
+OmgQmlPolygon::~OmgQmlPolygon()
+{
+
+}
+
+qreal OmgQmlPolygon::latRsl() const
+{
+    return m_lat_rsl;
+}
+
+qreal OmgQmlPolygon::lonRsl() const
+{
+    return m_lon_rsl;
+}
+
+qreal OmgQmlPolygon::maxLat() const
+{
+    return m_max_lat;
+}
+
+qreal OmgQmlPolygon::minLon() const
+{
+    return m_min_lon;
+}
+
+const QVariantList &OmgQmlPolygon::points() const
+{
+    return m_points;
+}
+
+void OmgQmlPolygon::setLatRsl(qreal lat_rsl)
+{
+    m_lat_rsl = lat_rsl;
+}
+
+void OmgQmlPolygon::setLonRsl(qreal lon_rsl)
+{
+    m_lon_rsl = lon_rsl;
+}
+
+void OmgQmlPolygon::setMaxLat(qreal max_lat)
+{
+    m_max_lat = max_lat;
+}
+
+void OmgQmlPolygon::setMinLon(qreal min_lon)
+{
+    m_min_lon = min_lon;
+}
+
+void OmgQmlPolygon::setPoints(const QVariantList &pnts)
+{
+    m_points = pnts;
+}
+
+void OmgQmlPolygon::addPoint(const OmgQmlPoint &pnt)
+{
+    m_points.append(QVariant::fromValue(pnt));
+}
+
+void OmgQmlPolygon::clear()
+{
+    m_points.clear();
+}
+
+OmgQmlPoint OmgQmlPolygon::pointConvertToQml(const OmgGeoPoint &geoPnt)
+{
+    OmgQmlPoint pt(geoPnt.lat(), geoPnt.lon(), geoPnt.red(), geoPnt.green(), geoPnt.blue());
+    return pt;
+}
+
+void OmgQmlPolygon::addNode(qreal lat, qreal lon)
+{
+    Vec2d pt(lon, lat);
+    m_polygon.append(pt);
+}
+
+void OmgQmlPolygon::clearNodes()
+{
+    m_polygon.clear();
+}
+
+int OmgQmlPolygon::pointCount()
+{
+    return m_points.size();
+}
+
+void OmgQmlPolygon::getInertnalPoints(int flag)
+{
+
+    calibrateLon(m_polygon);
+    //
+    double minX = 9999.9999;
+    double maxX = -9999.9999;
+    double minY = 9999.9999;
+    double maxY = -9999.9999;
+    for (auto iter = m_polygon.cbegin(); iter != m_polygon.cend(); ++iter)
+    {
+        minX = qMin(minX, iter->x);
+        maxX = qMax(maxX, iter->x);
+        minY = qMin(minY, iter->y);
+        maxY = qMax(maxY, iter->y);
+    }
+
+    // x is lon, y is lat.
+    m_max_lat = maxY;
+    m_min_lon = minX;
+
+    if (m_polygon.size() < 3)
+    {
+        return;
+    }
+    QVector<OmgGeoPoint> geoPnts;
+    switch (flag)
+    {
+        case 0: // emag2
+            geoPnts = m_raster_emag2.getInternalPoints(m_polygon, m_radio);
+            break;
+        case 1: // mamea
+            geoPnts = m_raster_mamea.getInternalPoints(m_polygon, m_radio);
+            break;
+        default:
+            ;
+    }
+
+    m_pnts = geoPnts;
+    m_points.clear();
+    for (auto iter = geoPnts.cbegin(); iter != geoPnts.cend(); ++iter)
+    {
+        addPoint(pointConvertToQml(*iter));
+    }
+}
+
+qreal OmgQmlPolygon::pointLat(int index)
+{
+    return m_pnts[index].lat();
+}
+
+qreal OmgQmlPolygon::pointLon(int index)
+{
+    return m_pnts[index].lon();
+}
+
+qreal OmgQmlPolygon::pointRed(int index)
+{
+    return m_pnts[index].red();
+}
+
+qreal OmgQmlPolygon::pointGreen(int index)
+{
+    return m_pnts[index].green();
+}
+
+qreal OmgQmlPolygon::pointBlue(int index)
+{
+    return m_pnts[index].blue();
+}
+
+void OmgQmlPolygon::setRadio(qreal radio)
+{
+    m_radio = radio;
+}
+
+void OmgQmlPolygon::calibrateLon(QVector<Vec2d> &POL)
+{
+    bool isNeed = false;
+    for (int i = 0; i < POL.size() - 1; ++i)
+    {
+        if (POL[i].x * POL[i + 1].x < 0.0f && qAbs(POL[i].x) + qAbs(POL[i + 1].x) > 180.0f)
+        {
+            isNeed = true;
+            break;
+        }
+    }
+
+    if (isNeed)
+    {
+        for (auto iter = POL.begin(); iter != POL.end(); ++iter)
+        {
+            if (iter->x < 0.0f)
+            {
+                iter->x = iter->x + 360.0f;
+            }
+        }
+    }
+}
+
+QString OmgQmlPolygon::getResImgPath()
+{
+    QDir appDir(QCoreApplication::applicationDirPath());
+
+    // 确保 images 目录存在
+    if (!appDir.exists("images")) {
+        appDir.mkpath("images");
+    }
+
+    QString absolutePath = appDir.absoluteFilePath("images/region.png");
+    return "file:///" + absolutePath;
+}
+
+QString OmgQmlPolygon::loadChinaBorder(){
+    QString file_path = ":/Map/China.json";
+    QFile file(file_path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "Failed to open file for reading:" << file.errorString();
+        return "";
+    }
+    QTextStream in(&file);
+    QString jsonString = in.readAll();
+    file.close();
+
+    QJsonParseError parseError;
+    QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonString.toUtf8(), &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        qWarning() << "JSON parsing error at offset" << parseError.offset << ":" << parseError.errorString();
+        return "";
+    }
+
+    QJsonObject jsonObject = jsonDoc.object();
+    QJsonValue jsonValue = jsonObject.value("features");
+    jsonObject = jsonValue[0].toVariant().toJsonObject();
+    jsonValue = jsonObject.value("geometry");
+    jsonObject = jsonValue.toVariant().toJsonObject();
+    jsonString = QString(QJsonDocument(jsonObject).toJson());
+    jsonString = jsonString.remove('\n').remove('\r').remove('\t');
+    return jsonString;
+}
+
+void OmgQmlPolygon::addVesselPath(const VesselPath &vessel_path){
+    QString json_str =  vessel_path.toJsonString();
+    emit sigAddVesselPath(json_str);
+}
+
+void OmgQmlPolygon::removeVesselPath(const QString &vessel_name){
+    emit sigRemoveVesselPath(vessel_name);
+}
+
+QString VesselPath::toJsonString() const {
+    QJsonObject js_obj;
+    QJsonValue js_val = QJsonValue(this->name);
+    js_obj.insert("name", js_val);
+    js_val = QJsonValue(this->color);
+    js_obj.insert("color",js_val);
+    js_val = QJsonValue(this->width);
+    js_obj.insert("width",js_val);
+    QJsonArray js_arr;
+    QJsonArray js_pos;
+    for(int i=0;i<this->pos.size();++i){
+        // Clear QJsonArray
+        while(js_pos.size()>0){
+            js_pos.pop_back();
+        }
+        js_val = QJsonValue(this->pos[i].latitude());
+        js_pos.push_back(js_val);
+        js_val = QJsonValue(this->pos[i].longitude());
+        js_pos.push_back(js_val);
+
+        js_arr.push_back(js_pos);
+    }
+    js_obj.insert("coordinates",js_arr);
+    QJsonDocument js_doc(js_obj);
+    QByteArray js_ba = js_doc.toJson();
+    QString js_str = QString::fromUtf8(js_ba);
+    return js_str;
+}

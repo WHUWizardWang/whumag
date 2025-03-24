@@ -1,0 +1,531 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1171</width>
+    <height>740</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>基于稀疏磁测数据地磁基准图高效构建软件</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_2">
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,5">
+      <property name="spacing">
+       <number>2</number>
+      </property>
+      <item>
+       <widget class="QTreeWidget" name="treeWidget">
+        <attribute name="headerVisible">
+         <bool>false</bool>
+        </attribute>
+        <column>
+         <property name="text">
+          <string notr="true">1</string>
+         </property>
+        </column>
+       </widget>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout" stretch="4,1">
+        <property name="spacing">
+         <number>1</number>
+        </property>
+        <item>
+         <widget class="QTabWidget" name="tabWidget">
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <widget class="QWidget" name="tab_image">
+           <attribute name="title">
+            <string>图形显示</string>
+           </attribute>
+           <layout class="QHBoxLayout" name="horizontalLayout_3">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_2">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tab_3d">
+           <attribute name="title">
+            <string>三维显示</string>
+           </attribute>
+           <layout class="QHBoxLayout" name="horizontalLayout_5">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_4">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="OmgGLWidget" name="widget" native="true"/>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTextBrowser" name="textBrowser"/>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1171</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>文件</string>
+    </property>
+    <widget class="QMenu" name="menu_history">
+     <property name="title">
+      <string>历史工程</string>
+     </property>
+     <addaction name="action1"/>
+    </widget>
+    <addaction name="action_newproject"/>
+    <addaction name="action_openproject"/>
+    <addaction name="menu_history"/>
+    <addaction name="separator"/>
+    <addaction name="action_import"/>
+    <addaction name="action_6"/>
+    <addaction name="action_readlines"/>
+    <addaction name="separator"/>
+    <addaction name="action_exit"/>
+   </widget>
+   <widget class="QMenu" name="menu_2">
+    <property name="title">
+     <string>数据库</string>
+    </property>
+    <addaction name="action_query"/>
+    <addaction name="action_anoquery"/>
+    <addaction name="action_database"/>
+   </widget>
+   <widget class="QMenu" name="menu_3">
+    <property name="title">
+     <string>显示</string>
+    </property>
+    <addaction name="actionshow"/>
+    <addaction name="action_3d"/>
+   </widget>
+   <widget class="QMenu" name="menu_4">
+    <property name="title">
+     <string>帮助</string>
+    </property>
+    <addaction name="action_manuals"/>
+    <addaction name="action_about"/>
+   </widget>
+   <widget class="QMenu" name="menu_5">
+    <property name="title">
+     <string>数据处理</string>
+    </property>
+    <widget class="QMenu" name="menu_7">
+     <property name="title">
+      <string>数据延拓</string>
+     </property>
+     <addaction name="action_up"/>
+     <addaction name="action_down"/>
+     <addaction name="action_evaluate"/>
+    </widget>
+    <widget class="QMenu" name="menu_6">
+     <property name="title">
+      <string>复杂度</string>
+     </property>
+     <widget class="QMenu" name="menu_8">
+      <property name="title">
+       <string>复杂度计算</string>
+      </property>
+      <addaction name="action_shuimian"/>
+      <addaction name="action_kongzhong"/>
+     </widget>
+     <addaction name="menu_8"/>
+     <addaction name="action_3"/>
+    </widget>
+    <addaction name="action_correct"/>
+    <addaction name="action_merge"/>
+    <addaction name="menu_7"/>
+    <addaction name="menu_6"/>
+   </widget>
+   <widget class="QMenu" name="menu_9">
+    <property name="title">
+     <string>匹配导航</string>
+    </property>
+    <addaction name="action_nav"/>
+   </widget>
+   <widget class="QMenu" name="menu_accuracy">
+    <property name="title">
+     <string>精度评估</string>
+    </property>
+    <addaction name="actionjianhexian"/>
+    <addaction name="actionjianhexian2"/>
+    <addaction name="action_xishushuixia"/>
+    <addaction name="action_xishukongzhong"/>
+   </widget>
+   <widget class="QMenu" name="menu_map">
+    <property name="title">
+     <string>基准图构建</string>
+    </property>
+    <widget class="QMenu" name="menu">
+     <property name="title">
+      <string>分区建模</string>
+     </property>
+     <addaction name="action_subarea"/>
+     <addaction name="action_build"/>
+     <addaction name="action_suball"/>
+    </widget>
+    <addaction name="action_globalmodel"/>
+    <addaction name="menu"/>
+    <addaction name="action_auto"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menu_2"/>
+   <addaction name="menu_5"/>
+   <addaction name="menu_map"/>
+   <addaction name="menu_accuracy"/>
+   <addaction name="menu_9"/>
+   <addaction name="menu_3"/>
+   <addaction name="menu_4"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="action_newproject">
+   <property name="text">
+    <string>新建工程</string>
+   </property>
+  </action>
+  <action name="action_openproject">
+   <property name="text">
+    <string>打开工程</string>
+   </property>
+  </action>
+  <action name="action_import">
+   <property name="icon">
+    <iconset resource="icons.qrc">
+     <normaloff>:/icons/import.svg</normaloff>:/icons/import.svg</iconset>
+   </property>
+   <property name="text">
+    <string>导入</string>
+   </property>
+  </action>
+  <action name="action_6">
+   <property name="icon">
+    <iconset resource="icons.qrc">
+     <normaloff>:/icons/export.svg</normaloff>:/icons/export.svg</iconset>
+   </property>
+   <property name="text">
+    <string>导出</string>
+   </property>
+  </action>
+  <action name="action_exit">
+   <property name="text">
+    <string>退出</string>
+   </property>
+  </action>
+  <action name="action_manuals">
+   <property name="text">
+    <string>操作手册</string>
+   </property>
+  </action>
+  <action name="action_11">
+   <property name="text">
+    <string>工具栏</string>
+   </property>
+  </action>
+  <action name="action_12">
+   <property name="text">
+    <string>窗口</string>
+   </property>
+  </action>
+  <action name="action_13">
+   <property name="text">
+    <string>布局</string>
+   </property>
+  </action>
+  <action name="action_14">
+   <property name="text">
+    <string>主题</string>
+   </property>
+  </action>
+  <action name="action_sql">
+   <property name="text">
+    <string>数据库</string>
+   </property>
+  </action>
+  <action name="action_16">
+   <property name="text">
+    <string>位置查询</string>
+   </property>
+  </action>
+  <action name="action_17">
+   <property name="text">
+    <string>数据剖面</string>
+   </property>
+  </action>
+  <action name="action1">
+   <property name="text">
+    <string>1</string>
+   </property>
+  </action>
+  <action name="action_query">
+   <property name="text">
+    <string>全球磁场查询</string>
+   </property>
+  </action>
+  <action name="action_anoquery">
+   <property name="text">
+    <string>全球磁异常查询</string>
+   </property>
+  </action>
+  <action name="action_correct">
+   <property name="text">
+    <string>通化改正</string>
+   </property>
+  </action>
+  <action name="action_merge">
+   <property name="text">
+    <string>数据融合</string>
+   </property>
+  </action>
+  <action name="action_taylor_build">
+   <property name="text">
+    <string>泰勒多项式</string>
+   </property>
+  </action>
+  <action name="action_legendre_build">
+   <property name="text">
+    <string>勒让德多项式</string>
+   </property>
+  </action>
+  <action name="action_polyhedral_build">
+   <property name="text">
+    <string>多面函数</string>
+   </property>
+  </action>
+  <action name="action_spline_build">
+   <property name="text">
+    <string>样条函数</string>
+   </property>
+  </action>
+  <action name="action_compress_build">
+   <property name="text">
+    <string>压缩感知</string>
+   </property>
+  </action>
+  <action name="action_lssvmpso_build">
+   <property name="text">
+    <string>深度学习</string>
+   </property>
+  </action>
+  <action name="action_sparsePara">
+   <property name="text">
+    <string>抽稀参数</string>
+   </property>
+  </action>
+  <action name="action_up">
+   <property name="text">
+    <string>向上延拓</string>
+   </property>
+  </action>
+  <action name="action_down">
+   <property name="text">
+    <string>向下延拓</string>
+   </property>
+  </action>
+  <action name="actionTERCOM">
+   <property name="text">
+    <string>TERCOM</string>
+   </property>
+  </action>
+  <action name="actionICCP">
+   <property name="text">
+    <string>ICCP</string>
+   </property>
+  </action>
+  <action name="actionSITAN">
+   <property name="text">
+    <string>SITAN</string>
+   </property>
+  </action>
+  <action name="action_subarea2">
+   <property name="text">
+    <string>分区</string>
+   </property>
+  </action>
+  <action name="action_build2">
+   <property name="text">
+    <string>建模</string>
+   </property>
+  </action>
+  <action name="action_suball2">
+   <property name="text">
+    <string>一键处理</string>
+   </property>
+  </action>
+  <action name="action_evaluate">
+   <property name="text">
+    <string>精度评估</string>
+   </property>
+  </action>
+  <action name="actionshow">
+   <property name="text">
+    <string>图像</string>
+   </property>
+  </action>
+  <action name="actionjianhexian">
+   <property name="text">
+    <string>水下检核线</string>
+   </property>
+  </action>
+  <action name="action_3d">
+   <property name="text">
+    <string>三维叠加显示</string>
+   </property>
+  </action>
+  <action name="action_about">
+   <property name="text">
+    <string>关于</string>
+   </property>
+  </action>
+  <action name="actionjianhexian2">
+   <property name="text">
+    <string>低空检核线</string>
+   </property>
+  </action>
+  <action name="action_database">
+   <property name="text">
+    <string>数据库</string>
+   </property>
+  </action>
+  <action name="action_navPara">
+   <property name="text">
+    <string>设置参数</string>
+   </property>
+  </action>
+  <action name="action_readlines">
+   <property name="text">
+    <string>导入多条测线</string>
+   </property>
+  </action>
+  <action name="action_globalmodel">
+   <property name="text">
+    <string>整图建模</string>
+   </property>
+  </action>
+  <action name="action_subarea">
+   <property name="text">
+    <string>分区</string>
+   </property>
+  </action>
+  <action name="action_build">
+   <property name="text">
+    <string>建模</string>
+   </property>
+  </action>
+  <action name="action_suball">
+   <property name="text">
+    <string>一键处理</string>
+   </property>
+  </action>
+  <action name="action_TERCOM_ICCP">
+   <property name="text">
+    <string>TERCOM-ICCP</string>
+   </property>
+  </action>
+  <action name="action_nav">
+   <property name="text">
+    <string>处理</string>
+   </property>
+  </action>
+  <action name="action_3">
+   <property name="text">
+    <string>测线间距计算</string>
+   </property>
+  </action>
+  <action name="action_shuimian">
+   <property name="text">
+    <string>水面复杂度计算</string>
+   </property>
+  </action>
+  <action name="action_kongzhong">
+   <property name="text">
+    <string>空中复杂度计算</string>
+   </property>
+  </action>
+  <action name="action_auto">
+   <property name="text">
+    <string>一键成图</string>
+   </property>
+  </action>
+  <action name="action_xishushuixia">
+   <property name="text">
+    <string>可稀疏性分析的水下检核线</string>
+   </property>
+  </action>
+  <action name="action_xishukongzhong">
+   <property name="text">
+    <string>可稀疏性分析的低空检核线</string>
+   </property>
+  </action>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>OmgGLWidget</class>
+   <extends>QWidget</extends>
+   <header>3DView/omgglwidget.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources>
+  <include location="icons.qrc"/>
+ </resources>
+ <connections/>
+</ui>
