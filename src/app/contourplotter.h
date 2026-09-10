@@ -3,7 +3,7 @@
 
 #include <set>
 #include <QMainWindow>
-#include "draw/qcustomplot.h"
+#include "qcustomplot.h"
 #include <vector>
 
 class ContourPlotter : public QMainWindow

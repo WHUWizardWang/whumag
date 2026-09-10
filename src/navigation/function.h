@@ -3,6 +3,6 @@
 #endif // FUNCTION_H
 #include <QVector>
 #include <QPointF>
-#include "draw/qcustomplot.h"
+#include "qcustomplot.h"
 
 QVector<QPointF> readPointsFromFile(const QString &fileName);

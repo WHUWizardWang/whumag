@@ -9,7 +9,7 @@
 #include "navigation/sitan.h"
 #include "navigation/tercom.h"
 #include "navigation/function.h"
-#include "draw/qcustomplot.h"
+#include "qcustomplot.h"
 
 namespace Geomagnetic {
 

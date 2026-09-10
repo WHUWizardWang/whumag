@@ -62,7 +62,6 @@ private:
     void setupVertexAttribs();
     void zoom(GLfloat value);
     void initColorMaps();
-    void loadColorMap();
     QVector<QVector3D> loadColorMap(const QString &colorMapPath);
     void reverseVertor(QVector<QVector3D> &vec);
 

@@ -1,8 +1,0 @@
-<RCC>
-    <qresource prefix="/">
-        <file>high_quality/0高度500米基准图.txt</file>
-        <file>high_quality/250高度50米基准图.txt</file>
-        <file>high_quality/500高度50米基准图.txt</file>
-        <file>high_quality/750高度50米基准图.txt</file>
-    </qresource>
-</RCC>

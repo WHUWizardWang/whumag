@@ -9,7 +9,7 @@
 
 OmgRaster::OmgRaster()
 {
-    getColorMap(":/resources/jet.rgb");
+    getColorMap(":/shaders/jet.rgb");
 }
 
 OmgRaster::OmgRaster(const OmgRaster &other)

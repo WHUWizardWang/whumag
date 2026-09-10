@@ -11,7 +11,7 @@
 #include <QVector>
 #include "DataStruct.h"
 #include "function.h"
-#include "draw/qcustomplot.h"
+#include "qcustomplot.h"
 #include "utils.h"
 #include "referencemap/KDTree.h"
 using namespace nanoflann;

@@ -11,13 +11,13 @@
         <file>icons/proj_close.svg</file>
         <file>icons/proj_open.svg</file>
         <file>geojson/China.geojson</file>
-        <file>resources/balance.rgb</file>
-        <file>resources/deep.rgb</file>
-        <file>resources/drywet.rgb</file>
-        <file>resources/fragment.fsh</file>
-        <file>resources/hot.rgb</file>
-        <file>resources/jet.rgb</file>
-        <file>resources/vertex.vsh</file>
+        <file>shaders/balance.rgb</file>
+        <file>shaders/deep.rgb</file>
+        <file>shaders/drywet.rgb</file>
+        <file>shaders/fragment.fsh</file>
+        <file>shaders/hot.rgb</file>
+        <file>shaders/jet.rgb</file>
+        <file>shaders/vertex.vsh</file>
         <file>icons/item_open_4.svg</file>
         <file>icons/item_close_4.svg</file>
         <file>icons/real_file.svg</file>

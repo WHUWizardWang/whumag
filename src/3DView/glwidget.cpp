@@ -105,8 +105,8 @@ void GLWidget::initializeGL()
     m_program = new QOpenGLShaderProgram;
     //    m_program->addShaderFromSourceCode(QOpenGLShader::Vertex, m_core ? vertexShaderSourceCore : vertexShaderSource);
     //    m_program->addShaderFromSourceCode(QOpenGLShader::Fragment, m_core ? fragmentShaderSourceCore : fragmentShaderSource);
-    m_program->addShaderFromSourceFile(QOpenGLShader::Vertex, ":/resources/vertex.vsh");
-    m_program->addShaderFromSourceFile(QOpenGLShader::Fragment, ":/resources/fragment.fsh");
+    m_program->addShaderFromSourceFile(QOpenGLShader::Vertex, ":/shaders/vertex.vsh");
+    m_program->addShaderFromSourceFile(QOpenGLShader::Fragment, ":/shaders/fragment.fsh");
     m_program->bindAttributeLocation("vertex", 0);
     m_program->bindAttributeLocation("normal", 1);
     m_program->bindAttributeLocation("colors", 2);
@@ -332,48 +332,15 @@ void GLWidget::setScale(int scale)
     update();
 }
 
-void GLWidget::loadColorMap()
-{
-    m_colorMap.clear();
-    QFile file(":/resources/matlab_jet.rgb");
-    file.open(QIODevice::ReadOnly);
-    QTextStream stream(&file);
-    stream.readLine();
-    stream.readLine();
-    while (stream.atEnd() == false)
-    {
-        QString line = stream.readLine();
-        QStringList strArr = line.split(' ', QString::SkipEmptyParts);
-        GLfloat red = strArr[0].toFloat();
-        GLfloat green = strArr[1].toFloat();
-        GLfloat blue = strArr[2].toFloat();
-        m_colorMap.push_back(QVector3D(red, green, blue));
-    }
-    file.close();
-
-    // Map to 0.0-1.0
-    float maxGray = 1.0;
-    for (auto iter = m_colorMap.cbegin(); iter != m_colorMap.cend(); ++iter)
-    {
-        if (iter->x() > 1.1f || iter->y() > 1.1f || iter->z() > 1.1f)
-        {
-            maxGray = 255.0;
-            break;
-        }
-    }
-    for (auto iter = m_colorMap.begin(); iter != m_colorMap.end(); ++iter)
-    {
-        iter->setX(iter->x() / maxGray);
-        iter->setY(iter->y() / maxGray);
-        iter->setZ(iter->z() / maxGray);
-    }
-}
-
 QVector<QVector3D> GLWidget::loadColorMap(const QString &colorMapPath)
 {
     QVector<QVector3D> colorMap;
     QFile file(colorMapPath);
-    file.open(QIODevice::ReadOnly);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        qWarning() << "GLWidget::loadColorMap: failed to open" << colorMapPath;
+        return colorMap;
+    }
     QTextStream stream(&file);
     stream.readLine();
     stream.readLine();
@@ -381,6 +348,8 @@ QVector<QVector3D> GLWidget::loadColorMap(const QString &colorMapPath)
     {
         QString line = stream.readLine();
         QStringList strArr = line.split(' ', QString::SkipEmptyParts);
+        if (strArr.size() < 3)
+            continue;
         GLfloat red = strArr[0].toFloat();
         GLfloat green = strArr[1].toFloat();
         GLfloat blue = strArr[2].toFloat();
@@ -414,7 +383,7 @@ void GLWidget::initColorMaps()
     QStringList colorMapNames = {"jet", "hot", "deep", "drywet", "balance"};
     for (int i = 0; i < colorMapNames.size(); ++i)
     {
-        QString colorMapPath = ":/resources/" + colorMapNames[i] + ".rgb";
+        QString colorMapPath = ":/shaders/" + colorMapNames[i] + ".rgb";
         QVector<QVector3D> colorMap = loadColorMap(colorMapPath);
         m_colorMapMap.insert(colorMapNames[i], colorMap);
     }

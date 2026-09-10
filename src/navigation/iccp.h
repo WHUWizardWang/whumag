@@ -14,7 +14,7 @@
 #include <QList>
 #include <QLineF>
 #include <eigen-3.4.0/Eigen/Dense>
-#include "draw/qcustomplot.h"
+#include "qcustomplot.h"
 #include "function.h"
 // 重载 << 运算符以支持 Eigen::Matrix3f 与 QDebug 的输出
 QDebug operator<<(QDebug dbg, const Eigen::Matrix2d& matrix);

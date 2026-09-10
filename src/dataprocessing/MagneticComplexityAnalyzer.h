@@ -13,7 +13,7 @@
 #include <QAtomicInt>
 #include <QFuture>
 #include <QtConcurrent/QtConcurrent>
-#include "draw/qcustomplot.h"
+#include "qcustomplot.h"
 #include "dataprocessing/accuracy.h"
 using namespace Eigen;
 namespace Geomagnetic {

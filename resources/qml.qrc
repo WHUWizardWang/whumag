@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/">
+        <file>Map/main.qml</file>
+        <file>Map/MapPopupMenu.qml</file>
+        <file>Map/OmgMapImage.qml</file>
+        <file>Map/PolygonItem.qml</file>
+        <file>Map/China.json</file>
+    </qresource>
+</RCC>
