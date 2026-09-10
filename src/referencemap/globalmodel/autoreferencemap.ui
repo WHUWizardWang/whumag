@@ -320,7 +320,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QWidget" name="widght_pic4" native="true"/>
+        <widget class="QWidget" name="widght_pic4" native="true">
+         <layout class="QHBoxLayout" name="horizontalLayout_11"/>
+        </widget>
        </item>
        <item>
         <widget class="QTextBrowser" name="textBrowser">

@@ -64,6 +64,8 @@ int inputPara_up(QDialog &dialog,double &h,bool &useBL,
         step_x     = spinboxX->value();
         step_y     = spinboxY->value();
         h          = spinboxH->value();
+        if (comboBox->count() == 0)
+            return -1;
         data_index = comboBox->currentIndex();
         dir        = fileNameEdit->text();
         useBL      = cbUseBL->isChecked();  // 将复选框状态写回

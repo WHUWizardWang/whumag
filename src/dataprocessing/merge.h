@@ -38,16 +38,14 @@ public:
 	double calculate_p1(Point a, Point b, double delt_phi0, double delt_lamda0);
 	double calculate_p2(double m);
     void readfile();
-    void readfile0(std::string s);//,vector<Point>&point0
     void allPoints(std::vector<std::vector<Point>>a, std::vector<Point>&all_points);
     std::vector<Point>calModel(double delt_phi0, double delt_lamda0);
     void evaluatePrecision(std::vector<Point>a, std::vector<Point>b);
-    void rongHe_run(std::string infile0, double delt_phi0, double delt_lamda0);
     void rongHe_run2(double delt_phi0, double delt_lamda0,
                              double min_B, double min_L, double max_B, double max_L,double Bint,double Lint);
     void rongHe_run3(double delt_phi0, double delt_lamda0,
                              double min_B, double min_L, double max_B, double max_L,double Bint,double Lint);
-    void createMap(double min_B, double min_L, double max_B, double max_L, double Bint, double Lint); // Éú³ÉÄ£°åÈÝÆ÷
+    void createMap(double min_B, double min_L, double max_B, double max_L, double Bint, double Lint); // ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     void createMap2(double min_B, double min_L, double max_B, double max_L,double Bint,double Lint);
     void outResult(QString filepath);
 
@@ -56,7 +54,7 @@ public:
     std::vector<Point>doc_P;
     std::vector<Point>point0;
     std::vector<std::vector<Point>>doc_points;
-    std::vector<Point>data;  //ÓÃÓÚ´æ·Å²åÖµºóµÄ´ÅÒì³£ÐÅÏ¢
+    std::vector<Point>data;  //ï¿½ï¿½ï¿½Ú´ï¿½Å²ï¿½Öµï¿½ï¿½Ä´ï¿½ï¿½ì³£ï¿½ï¿½Ï¢
     std::vector<Point>all_point;
 
 	double p1;
@@ -66,6 +64,7 @@ public:
     std::vector<double>T2;
 
 private:
+    void buildGrid(double min_B, double min_L, double max_B, double max_L, double Bint, double Lint, double B1, double B2, double L1, double L2);
 
 };
 

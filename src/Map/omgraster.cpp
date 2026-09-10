@@ -12,20 +12,6 @@ OmgRaster::OmgRaster()
     getColorMap(":/shaders/jet.rgb");
 }
 
-OmgRaster::OmgRaster(const OmgRaster &other)
-{
-    m_left_top_lat = other.m_left_top_lat;
-    m_left_top_lon = other.m_left_top_lon;
-    m_lat_resolution = other.m_lat_resolution;
-    m_lon_resolution = other.m_lon_resolution;
-    m_height = other.m_height;
-    m_width = other.m_width;
-    m_maxValue = other.m_maxValue;
-    m_minValue = other.m_minValue;
-    m_data = other.m_data;
-    m_colorMap = other.m_colorMap;
-}
-
 void OmgRaster::setLeftTopLatLon(float lat, float lon)
 {
     m_left_top_lat = lat;
@@ -42,7 +28,10 @@ bool OmgRaster::getColorMap(const QString &colorMapPath)
 {
     m_colorMap.clear();
     QFile file(colorMapPath);
-    file.open(QIODevice::ReadOnly);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return false;
+    }
     QTextStream stream(&file);
     stream.readLine();
     stream.readLine();
@@ -50,6 +39,10 @@ bool OmgRaster::getColorMap(const QString &colorMapPath)
     {
         QString line = stream.readLine();
         QStringList strArr = line.split(' ', QString::SkipEmptyParts);
+        if (strArr.size() < 3)
+        {
+            continue;
+        }
         float red = strArr[0].toFloat();
         float green = strArr[1].toFloat();
         float blue = strArr[2].toFloat();
@@ -125,6 +118,10 @@ bool OmgRaster::loadFromPoints(const QString &filePath)
     {
         QString line = stream.readLine();
         QStringList strArr = line.split(' ', QString::SkipEmptyParts);
+        if (strArr.size() < 3)
+        {
+            continue;
+        }
         float lon = strArr[0].toFloat();
         float lat = strArr[1].toFloat();
         float value = strArr[2].toFloat();
@@ -141,7 +138,7 @@ bool OmgRaster::loadFromPoints(const QString &filePath)
     for (int i = 0; i < pnts.size(); ++i)
     {
         minLon = qMin(minLon, pnts[i].x());
-        maxLon = qMax(maxLat, pnts[i].x());
+        maxLon = qMax(maxLon, pnts[i].x());
         minLat = qMin(minLat, pnts[i].y());
         maxLat = qMax(maxLat, pnts[i].y());
         minV = qMin(minV, pnts[i].z());
@@ -190,6 +187,11 @@ QVector<OmgGeoPoint> OmgRaster::getInternalPoints(QVector<Vec2d> &POL, float rad
         maxX = qMax(maxX, iter->x);
         minY = qMin(minY, iter->y);
         maxY = qMax(maxY, iter->y);
+    }
+
+    if (m_width <= 0.0f || m_height <= 0.0f || m_lat_resolution == 0.0f || m_lon_resolution == 0.0f)
+    {
+        return QVector<OmgGeoPoint>();
     }
 
     // x is lon, y is lat.

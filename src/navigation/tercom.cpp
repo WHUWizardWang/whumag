@@ -5,34 +5,6 @@ namespace Geomagnetic
 	TercomMatching::TercomMatching()
 	{
 	}
-	TercomMatching::TercomMatching(const Datapoint& inputData, const Datapoint& inputBase, const Datapoint& inputINS)
-	{
-		data = inputData;
-//		for (const auto& elem : inputData)
-//		{
-//			TruePath t;
-//			t.x = elem.second.X;
-//			t.y = elem.second.Y;
-//			truePath.push_back(t);
-//		}
-		for (const auto& elem : inputBase)
-		{
-			MapData mapData;
-			mapData.x = elem.second.X;
-			mapData.y = elem.second.Y;
-			mapData.magnetic = elem.second.Z;
-			base.push_back(mapData);
-		}
-		for (const auto& elem : inputINS)
-		{
-			INSData insdata;
-			insdata.x = elem.second.X;
-			insdata.y = elem.second.Y;
-			insdata.heading = elem.second.Z;
-			insdata.magnetic = elem.second.tMagnetic;
-			insData.push_back(insdata);
-		}
-	}
     int TercomMatching::ReadBackground(const QString &filePath)
     {
         QFile file(filePath);
@@ -116,28 +88,10 @@ namespace Geomagnetic
     void TercomMatching::ReadTruePath(const QString &filePath)
     {
         truePath.clear();
-        QFile file(filePath);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            qWarning()<<"打开真实路径文件失败:"<<filePath;
-            return;
-        }
-        QTextStream in(&file);
-        while (!in.atEnd()) {
-            QString line = in.readLine().trimmed();
-            if (line.isEmpty()) continue;
-            // 支持逗号或任意空白分隔
-            QStringList fields = line.split(QRegExp("[,\\s]+"), QString::SkipEmptyParts);
-            if (fields.size() < 2) {
-                qWarning()<<"RealPath 格式错误:"<<line;
-                continue;
-            }
-            bool okX, okY;
-            double x = fields[0].toDouble(&okX), y = fields[1].toDouble(&okY);
-            if (!okX||!okY) {
-                qWarning()<<"RealPath 数值转换失败:"<<line;
-                continue;
-            }
-            truePath.push_back({x,y});
+        const QVector<QPointF> pts = readPointsFromFile(filePath);
+        truePath.reserve(pts.size());
+        for (const QPointF &p : pts) {
+            truePath.push_back(TruePath{p.x(), p.y()});
         }
         qDebug()<<"Loaded truePath points:"<<truePath.size();
     }
@@ -160,13 +114,6 @@ namespace Geomagnetic
         }
         file.close();
     }
-	void TercomMatching::printData() const
-	{
-		for (auto& point : data)
-		{
-			std::cout << point.second.X << " " << point.second.Y << " " << point.second.Z << std::endl;
-		}
-	}
 	double TercomMatching::calculateDistance(const INSData& insData, const MapData& base) const
 	{
 		// Calculate the distance between two points
@@ -261,6 +208,11 @@ namespace Geomagnetic
 
     Datapoint TercomMatching::matchWithAdaptiveRotation()
     {
+        if (insData.empty()) {
+            error_str += "错误: INS数据为空，无法进行TERCOM匹配!\n";
+            qWarning() << "matchWithAdaptiveRotation: insData is empty, aborting";
+            return Datapoint();
+        }
         // ————— 准备工作 —————
         const double stepSize     = 0.5 * M_PI / 180.0;
         const double maxAngle     = 10  * M_PI / 180.0;
@@ -365,6 +317,12 @@ namespace Geomagnetic
         Datapoint result;
         result.clear();
 
+        if (insData.empty()) {
+            error_str += "错误: INS数据为空，无法进行TERCOM匹配!\n";
+            qWarning() << "match: insData is empty, aborting";
+            return Datapoint();
+        }
+
         // 阈值：3σ
         const double sigma3 = insData[0].sigma * 3.0;
 
@@ -415,23 +373,12 @@ namespace Geomagnetic
         return result;
 	}
 
-	void TercomMatching::getCentroid(const Datapoint& data, double& xg, double& yg)
-	{
-		double xSum = 0;
-		double ySum = 0;
-		for (const auto& point : data)
-		{
-			xSum += point.second.X;
-			ySum += point.second.Y;
-		}
-		xg = xSum / data.size();
-		yg = ySum / data.size();
-	}
-	
-
-
     void TercomMatching::drawResult(Datapoint matchResult)
     {
+        if (base.empty()) {
+            qWarning() << "drawResult: base 为空，无法绘制热力图";
+            return;
+        }
         // 创建QCustomPlot对象
             customPlot = new QCustomPlot;
             // 设置窗口大小

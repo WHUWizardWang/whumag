@@ -64,46 +64,6 @@ int inputPara_taylor(QDialog &dialog,int &order,QString &filename,
         return -1;
 }
 
-int inputPara_legendre(QDialog &dialog,int &order,QString &filename,
-                       int &data_num,QStringList &data_name_list,int &data_index,QString dir)
-{
-    QFormLayout form(&dialog);
-    dialog.setWindowTitle("勒让德多项式-输入参数: ");
-    // #1
-    QComboBox *comboBox = new QComboBox;
-    for (int i = 0;i<data_num;i++)
-    {
-        comboBox->addItem(data_name_list[i]);
-    }
-    form.addRow("选择数据: ",comboBox);
-    // #2
-    QString value1 = QString("阶数: ");
-    QSpinBox *spinbox1 = new QSpinBox(&dialog);
-    form.addRow(value1, spinbox1);
-    // #3
-    QLineEdit *lineEdit = new QLineEdit(&dialog);
-    form.addRow("另存为: ", lineEdit);
-    // #4
-    QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
-        Qt::Horizontal, &dialog);
-    form.addRow(&buttonBox);
-    QObject::connect(&buttonBox, SIGNAL(accepted()), &dialog, SLOT(accept()));
-    QObject::connect(&buttonBox, SIGNAL(rejected()), &dialog, SLOT(reject()));
-    // Process when OK button is clicked
-    if (dialog.exec() == QDialog::Accepted)
-    {
-        order = spinbox1->value();
-        data_index = comboBox->currentIndex();
-        filename = lineEdit->text();
-        int ret = checkAndSaveFile(dir+"/Processed",filename);
-        if (ret == -1)
-            return -1;
-        return 0;
-    }
-    else
-        return -1;
-}
-
 int inputPara_polyhedral(QDialog &dialog,short &type,double &para,QString &filename,
                          int &data_num,QStringList &data_name_list,int &data_index,QString dir)
 {

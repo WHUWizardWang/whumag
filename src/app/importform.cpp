@@ -66,6 +66,12 @@ void ImportForm::openData(QString filePath,double &xmin,double &xmax,double &ymi
         vv.append(value);
     }
     file.close();
+    if (xx.isEmpty() || yy.isEmpty())
+    {
+        QMessageBox::warning(this, "警告", "所选文件未包含可解析的数据行");
+        xmin = xmax = ymin = ymax = 0.0;
+        return;
+    }
     xmin = *std::min_element(std::begin(xx),std::end(xx));
     xmax = *std::max_element(std::begin(xx),std::end(xx));
     ymin = *std::min_element(std::begin(yy),std::end(yy));
@@ -133,21 +139,6 @@ void ImportForm::on_pushButton_confirm_clicked()
         close();
         return;
     }
-//    if (file_suffix == ".txt" || file_suffix == ".dat")
-//    {
-//        xyz_toSQL(fileinfo,TableName);
-//        emit textUpdated("数据%"+TableName+"已成功导入至数据库!");
-//        QCoreApplication::processEvents();
-//        return;
-//    }
-//    else if (file_suffix == ".grd")
-//    {
-//        grd_toSQL(fileinfo,TableName);
-//        emit textUpdated("数据"+TableName+"已成功导入至数据库!");
-//        QCoreApplication::processEvents();
-//        return;
-//    }
-
 }
 
 void ImportForm::dataInput(const QString &tablename,const QString &input,double &dx,double &dy)
@@ -155,88 +146,3 @@ void ImportForm::dataInput(const QString &tablename,const QString &input,double 
     emit inputReceived(tablename,input,dx,dy);
 }
 
-void ImportForm::xyz_toSQL(QFileInfo fileinfo,QString TableName)
-{
-    TableName = TableName.left(TableName.lastIndexOf('.'));
-    if (DatabaseManager::instance().initConnection())
-    {
-        qDebug() << "Database connection successful!";
-        QSqlDatabase db = DatabaseManager::instance().getDatabase();
-        QSqlQuery query(db);
-        if (db.open())
-        {
-            qDebug()<<"seccess!";
-        } else
-        {
-            qDebug()<<"failed!";
-            qDebug()<<db.lastError();
-        }
-        // 判断是否存在 表TableName
-        int flag =0;
-        QString str = QString("select count(*) from information_schema.tables where table_name='%1';").arg(TableName) ;
-        query.prepare(str);
-        query.exec();
-        if(query.first())
-        {
-            flag = query.value(0).toInt();
-        }
-        if(flag)
-        {
-            qDebug()<<"Table already exists !";
-            return;
-        }
-        else
-        {
-            str = QString("CREATE TABLE %1 (x double precision,y double precision, z double precision);").arg(TableName);
-            query.exec(str);
-            QString str = QString("select count(*) from information_schema.tables where table_name='%1';").arg(TableName);
-            query.prepare(str);
-            query.exec();
-            if(query.first())
-            {
-                qDebug()<<"create tabel success!";
-            }
-            // 数据写入
-            QFile file(fileinfo.absoluteFilePath());
-            if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-            {
-                qDebug() << "Could not open file!";
-                return;
-            }
-            QTextStream in(&file);
-            while (!in.atEnd())
-            {
-                QString line = in.readLine();
-                QStringList fields = line.split(QRegExp("\\s+"), QString::SkipEmptyParts);
-                double x = fields.at(0).toDouble();
-                double y = fields.at(1).toDouble();
-                double z = fields.at(2).toDouble();
-                QString str = QString("INSERT INTO %4 VALUES(%1,%2,%3);")
-                    .arg(x).arg(y).arg(z).arg(TableName);
-//                qDebug()<<str;
-                query.prepare(str);
-                if(!query.exec())
-                {
-                    qDebug()<<"query error :"<<query.lastError();
-                }
-            }
-            file.close();
-        }
-        qDebug() << "finish!";
-        close();
-    }
-}
-
-void ImportForm::grd_toSQL(QFileInfo fileinfo,QString TableName)
-{
-    QStringList shell_str;
-    shell_str <<"-c";
-    shell_str <<  QString("raster2pgsql -s 4326 -I -C %1 %2 | PGPASSWORD=123456 psql -h 127.0.0.1 -d whumag -U postgres")
-            .arg(fileinfo.absoluteFilePath()).arg(TableName);
-    QProcess process;
-    process.start("/bin/bash",shell_str);
-    process.waitForFinished(-1); // 等待命令执行完成，-1表示无限期等待
-    QString output = process.readAllStandardOutput(); // 读取标准输出
-    QString errorOutput = process.readAllStandardError(); // 读取错误输出
-    qDebug()<<errorOutput;
-}

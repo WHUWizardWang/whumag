@@ -19,7 +19,6 @@ public:
     explicit AnoQueryFromPointSetForm(QWidget *parent = nullptr);
     ~AnoQueryFromPointSetForm();
 
-    MagHeader toParameters();
     int toCoordGeodeticArray(QVector<AnoPoint> &ano_pnts);
 
 private:

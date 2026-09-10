@@ -17,9 +17,6 @@ public:
     ~GLWidget();
 
     void load();
-    void loadNewTerrain(const QVector<double> &pnts, int width, int height, double scale);
-    void loadNewTerrain(const QVector<double> &pnts, int width, int height, double scale,
-                        const QVector<QVector3D> &colors);
     void setTerrainPointer(Terrain *terrain_ptr);
     void setColorMaps();
 
@@ -60,6 +57,7 @@ protected:
 
 private:
     void setupVertexAttribs();
+    void uploadTerrainToGpu();
     void zoom(GLfloat value);
     void initColorMaps();
     QVector<QVector3D> loadColorMap(const QString &colorMapPath);

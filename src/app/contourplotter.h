@@ -19,7 +19,6 @@ public:
     void autoplotContour();
     void autoDetectStep();
     void setRMS(double rms) { m_rms = rms; }
-    void savePlot(const QString& pngpath);
     void setStep(double x, double y) { dx = x; dy = y; }
     void setData(const std::vector<double>& x, const std::vector<double>& y, const std::vector<double>& z) {
         X = x;
@@ -40,11 +39,6 @@ private:
     std::vector<std::vector<double>> Z_grid;
     double m_rms;
 
-    // 插值函数
-    double bilinearInterpolate(double x, double y,
-                               const std::vector<double>& gridX,
-                               const std::vector<double>& gridY,
-                               const std::vector<std::vector<double>>& gridZ);
     bool checkRegularGrid(const std::vector<double>& x, const std::vector<double>& y,double expectedDx, double expectedDy);
     void fillEmptyGridCells(std::vector<std::vector<double>>& grid);
     static double estimateStep(const std::vector<double>& v);

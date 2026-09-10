@@ -1,5 +1,6 @@
 #include "queryfromgridsetform.h"
 #include "ui_queryfromgridsetform.h"
+using wmm::OmgValidator;
 
 QueryFromGridSetForm::QueryFromGridSetForm(QWidget *parent) :
     QWidget(parent),
@@ -91,7 +92,7 @@ int QueryFromGridSetForm::getIntervalNum(double beg, double end, double interval
     {
         return 0;
     }
-    if (interval < 0)
+    if (interval <= 0)
     {
         return 0;
     }

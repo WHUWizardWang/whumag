@@ -18,23 +18,6 @@ AnoQueryFromPointSetForm::~AnoQueryFromPointSetForm()
     delete ui;
 }
 
-MagHeader AnoQueryFromPointSetForm::toParameters()
-{
-    bool ok;
-    MagHeader header;
-    header.valid = true;
-    header.lat = OmgValidator::varifyTextLat(ui->lineEdit_lat->text(), &ok);
-    header.valid &= ok;
-    header.lon = OmgValidator::varifyTextLon(ui->lineEdit_lon->text(), &ok);
-    header.valid &= ok;
-    //    header.height = OmgValidator::varifyTextHeight(ui->lineEdit_height->text(), &ok);
-    //    header.valid &= ok;
-    //    header.time = OmgValidator::varifyTextDate(ui->dateTimeEdit->text(), &ok);
-    //    header.valid &= ok;
-    //    header.height_class = ui->comboBox->currentText()[0].unicode();
-    return header;
-}
-
 int AnoQueryFromPointSetForm::toCoordGeodeticArray(QVector<AnoPoint> &ano_pnts)
 {
 

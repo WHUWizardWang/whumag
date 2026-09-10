@@ -111,11 +111,24 @@ namespace Geomagnetic
         void cal(Datapoint& trainData,Datapoint& datapoint,double para1,double para2,std::string out);
         
         void run(Datapoint& all,Datapoint& train,QString out);
-        void run(Datapoint& all,Datapoint& train, Datapoint& test,QString out); // 所有功能合并
         void save_para(Datapoint& datapoint,double& rms); // 保存最优参数到txt文件
         void save_result(Datapoint& all,QString out); // 保存经纬度、XY、估计值、真实值、差值
         void readPara(int& p1, double& p2, double& p3, double& p4, double& p5,
                       double& p6, double& p7,int& p8, double& p9, double& p10, double& p11);
+
+        LSSVMPSO() : vGroup(nullptr), vPositionMinValue(nullptr), vPositionMaxValue(nullptr),
+                     vVelocityMinValue(nullptr), vVelocityMaxValue(nullptr), vAvgFitnessGen(nullptr) {}
+        ~LSSVMPSO()
+        {
+            delete[] vGroup;
+            delete[] vPositionMinValue;
+            delete[] vPositionMaxValue;
+            delete[] vVelocityMinValue;
+            delete[] vVelocityMaxValue;
+            delete[] vAvgFitnessGen;
+        }
+        LSSVMPSO(const LSSVMPSO&) = delete;
+        LSSVMPSO& operator=(const LSSVMPSO&) = delete;
     };
 
 }

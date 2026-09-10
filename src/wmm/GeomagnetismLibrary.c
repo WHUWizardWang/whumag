@@ -341,9 +341,12 @@ int MAG_robustReadMagModels(char *filename, MAGtype_MagneticModel *(*magneticmod
     FILE *MODELFILE;
     MODELFILE = fopen(filename, "r");
     if(MODELFILE == 0) {
+        free(line);
         return 0;
     }
     if (NULL==fgets(line, MAXLINELENGTH, MODELFILE)){
+        fclose(MODELFILE);
+        free(line);
         return 0;
     }
     
@@ -1365,6 +1368,8 @@ int MAG_readMagneticModel_Large(char *filename, char *filenameSV, MAGtype_Magnet
     MAG_COFSV_File = fopen(filenameSV, "r");
     if(MAG_COF_File == NULL || MAG_COFSV_File == NULL)
     {
+        if(MAG_COF_File != NULL) fclose(MAG_COF_File);
+        if(MAG_COFSV_File != NULL) fclose(MAG_COFSV_File);
         MAG_Error(20);
         return FALSE;
     }

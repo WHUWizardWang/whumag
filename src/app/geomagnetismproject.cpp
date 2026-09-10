@@ -6,20 +6,6 @@ GeoMagnetismProject::GeoMagnetismProject(Project *parent) : Project(parent)
 }
 
 GeoMagnetismProject::~GeoMagnetismProject(){
-    DeletePointerInVector(vec_global_geomag_model_);
-    DeletePointerInVector(vec_magnetic_anomaly_);
-    DeletePointerInVector(vec_survey_data_);
-    DeletePointerInVector(vec_background_map_);
-}
-
-template<typename T>
-void GeoMagnetismProject::DeletePointerInVector(QVector<T*>& vec_ptr_t){
-    foreach(auto ptr_v, vec_ptr_t){
-        if(ptr_v!=nullptr){
-            delete  ptr_v;
-            ptr_v = nullptr;
-        }
-    }
 }
 
 bool copyFile(const QString &sourceFile, const QString &destFile)

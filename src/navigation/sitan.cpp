@@ -170,6 +170,11 @@ using namespace Geomagnetic;
                 ymin = qMin(ymin, *it);
             }
         }
+        if (x_bg.isEmpty() || y_bg.isEmpty()) {
+            qWarning() << "ReadBackground: no valid data points parsed from" << filePath << "- returning empty grid";
+            file.close();
+            return QVector<QVector<double>>();
+        }
         int xSize = static_cast<int>((xmax - xmin) / dx) + 1;
         int ySize = static_cast<int>((ymax - ymin) / dy) + 1;
         QVector<QVector<double>> data(xSize, QVector<double>(ySize, 0.0));
@@ -365,85 +370,6 @@ using namespace Geomagnetic;
         }
         // 关闭文件
         dataFile.close();
-    }
-
-    void SitanMatching::SITANAlgorithm(const QString &back,const QString &ins,const QString &real)
-    {
-        QVector<QVector<double>> background = ReadBackground(back);
-        QVector<INSData> insdata = ReadINS(ins);
-        QVector<QPointF> REAL = readPointsFromFile(real);
-        kf = KalmanFilter(background);
-        VectorXd init(2);
-        init[0] = insdata[0].x;
-        init[1] = insdata[0].y;
-        kf.init(init);
-        std::vector<VectorXd> coordinate;
-        for(int i =0 ;i<insdata.size()-1;i++)
-        {
-            VectorXd current(2);
-            VectorXd next(2);
-            VectorXd coord;
-            current[0] = insdata[i].x;
-            current[1] = insdata[i].y;
-            kf.predict(current);
-            next[0] = insdata[i+1].x;
-            next[1] = insdata[i+1].y;
-            coord = kf.update(insdata[i].magnetic,next);
-            coordinate.push_back(coord);
-        }
-        for(const auto& elem : coordinate)
-        {
-        qDebug()<<elem[0]<<" "<<elem[1]<<Qt::endl;
-        }
-        QVector<QPointF> X;
-        for(const auto& vec:coordinate)
-        {
-            QPointF point(vec(0),vec(1));
-            X.push_back(point);
-        }
-        drawResult(X,background,REAL,back,insdata);
-        totxt(X,"sitan_out.txt");
-    }
-    void SitanMatching::SITANAlgorithm(const QString &back,const QString &ins_real,const QString &ins,const QString &real)
-    {
-        QVector<QVector<double>> background = ReadBackground(back);
-        QVector<INSData> insdata = ReadINS(ins);
-        QVector<INSData> insdata_real = ReadINS(ins_real);
-        QVector<QPointF> REAL = readPointsFromFile(real);
-        kf = KalmanFilter(background);
-        VectorXd init(2);
-        init[0] = insdata[0].x;
-        init[1] = insdata[0].y;
-        kf.init(init);
-        std::vector<VectorXd> coordinate;
-        for(int i =0 ;i<insdata.size()-1;i++)
-        {
-            VectorXd current(2);
-            VectorXd next(2);
-            VectorXd coord;
-            current[0] = insdata[i].x;
-            current[1] = insdata[i].y;
-            kf.predict(current);
-            next[0] = insdata[i+1].x;
-            next[1] = insdata[i+1].y;
-            coord = kf.update(insdata[i].magnetic,next);
-            coordinate.push_back(coord);
-        }
-        QVector<QPointF> X;
-        for(const auto& vec:coordinate)
-        {
-            QPointF point(vec(0),vec(1));
-            X.push_back(point);
-        }
-        double sumOfSquares = 0.0;
-        for (int i = 0; i < REAL.size()-1; ++i) {
-            QPointF error = REAL[i] - X[i]; // 计算误差
-            sumOfSquares += error.x() * error.x() + error.y() * error.y(); // 累加误差的平方
-        }
-        double rms = std::sqrt(sumOfSquares / REAL.size()); // 计算RMS
-        qDebug()<<rms;
-        drawResult(X,background,REAL,back,insdata_real);
-        totxt(X,"sitan_out.txt");
     }
 
     QVector<QPointF> SitanMatching::SITANAlgorithm(const QVector<QVector<double>>& background,const QVector<INSData>& insdata)

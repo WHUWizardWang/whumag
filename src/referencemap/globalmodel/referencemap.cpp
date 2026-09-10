@@ -185,28 +185,6 @@ void ReferenceMap::on_comboBox_model_currentIndexChanged(int index)
     }
 }
 
-double ReferenceMap::calculateRMS(const Geomagnetic::Datapoint &datapoints,
-                                const Geomagnetic::Datapoint &dataresults)
-{
-    double sumSquaredError = 0.0;
-    int count = 0;
-
-    for (const auto& [key, datapoint] : datapoints)
-    {
-        auto it = dataresults.find(key);
-        if (it != dataresults.end())
-        {
-            double error = datapoint.tMagnetic - it->second.tMagnetic;
-            sumSquaredError += error * error;
-            ++count;
-        }
-    }
-
-    if (count == 0) return 0.0;
-    return std::sqrt(sumSquaredError / count);
-}
-
-
 void ReferenceMap::on_pushButton_clicked()
 {
     sparse_para = this->ui->doubleSpinBox_sparse->value();
@@ -230,6 +208,11 @@ void ReferenceMap::on_pushButton_clicked()
         }
         int para0 = taylorlegendre_form_->getspinbox();
         int data_index = ui->comboBox_data->currentIndex();
+        if (data_index < 0 || data_index >= nameList_real.size())
+        {
+            QMessageBox::warning(nullptr, "错误", "请先导入实测数据后再进行该操作!");
+            return;
+        }
         QString filename = ui->lineEdit_savePath->text();
         std::string str = (projectPath+"/Measured/"+nameList_real[data_index]).toStdString();
         if (filename.isEmpty())
@@ -294,8 +277,10 @@ void ReferenceMap::on_pushButton_clicked()
         draw_form_->create_xyz_f(QString::fromStdString(s),xx,yy,zz);
         draw_form_->autoset_heatMapView(xx,yy,zz);
         draw_form_->setMapStep(dx,dy);
-        if(draw_form_->magWarn == false)
+        if(draw_form_->magWarn == false) {
+            delete draw_form_;
             return;
+        }
         draw_form_->autoset_contourView(xx,yy,zz);
         ui->widget_pic0->layout()->addWidget(draw_form_);
         ui->textBrowser->append("结果图已生成\n");
@@ -318,6 +303,11 @@ void ReferenceMap::on_pushButton_clicked()
         }
         int para1 = taylorlegendre_form_->getspinbox();
         int data_index = ui->comboBox_data->currentIndex();
+        if (data_index < 0 || data_index >= nameList_real.size())
+        {
+            QMessageBox::warning(nullptr, "错误", "请先导入实测数据后再进行该操作!");
+            return;
+        }
         QString filename = ui->lineEdit_savePath->text();
         std::string str = (projectPath+"/Measured/"+nameList_real[data_index]).toStdString();
         if (filename.isEmpty())
@@ -399,6 +389,11 @@ void ReferenceMap::on_pushButton_clicked()
         int paraModel = polyhedral_form_->getModelType();
         double para2 = polyhedral_form_->getdoubleSpinBoxPara();
         int data_index = ui->comboBox_data->currentIndex();
+        if (data_index < 0 || data_index >= nameList_real.size())
+        {
+            QMessageBox::warning(nullptr, "错误", "请先导入实测数据后再进行该操作!");
+            return;
+        }
         QString filename = ui->lineEdit_savePath->text();
         std::string str = (projectPath+"/Measured/"+nameList_real[data_index]).toStdString();
         if (paraModel == -1)
@@ -546,6 +541,11 @@ void ReferenceMap::on_pushButton_clicked()
         double para3_0 = spline_form_->getdoubleSpinBox();
         int para3_1 = spline_form_->getspinBox();
         int data_index = ui->comboBox_data->currentIndex();
+        if (data_index < 0 || data_index >= nameList_real.size())
+        {
+            QMessageBox::warning(nullptr, "错误", "请先导入实测数据后再进行该操作!");
+            return;
+        }
         QString filename = ui->lineEdit_savePath->text();
         std::string str = (projectPath+"/Measured/"+nameList_real[data_index]).toStdString();
         if (filename.isEmpty())
@@ -640,6 +640,11 @@ void ReferenceMap::on_pushButton_clicked()
         }
         int para4 = compress_form_->getspinBox();
         int data_index = ui->comboBox_data->currentIndex();
+        if (data_index < 0 || data_index >= nameList_real.size())
+        {
+            QMessageBox::warning(nullptr, "错误", "请先导入实测数据后再进行该操作!");
+            return;
+        }
         QString filename = ui->lineEdit_savePath->text();
         if (filename.isEmpty())
         {
@@ -659,32 +664,12 @@ void ReferenceMap::on_pushButton_clicked()
             QMessageBox::warning(this, "Failure", "Geophysical reconstruction failed.");
             return;
         }
-        // QString s = projectPath+"/Processed/"+filename;
-        // QString script_path = "/home/greatwall/whumag/cs.py";
-        // QString pythonPath = "/home/greatwall/mag/bin/python";
-        // QString command = QString("%1 %2 %3 %4 %5 %6 %7")
-        //                         .arg(pythonPath)
-        //                         .arg(script_path)
-        //                         .arg(datafile)
-        //                         .arg(para4)
-        //                         .arg(sampling_factor)
-        //                         .arg(out_dir)
-        //                         .arg(filename);
-        // int result = system(command.toStdString().c_str());
         else
         {
             ui->textBrowser->append("基于压缩感知方法结果计算完成");
             QCoreApplication::processEvents();;
         }
         QString s = projectPath+"/Processed/"+filename;
-        // bool flag = manager.saveResults(s.toStdString());
-        // //
-        // Geomagnetic::Datapoint datapoints1,datapoints2;
-        // Geomagnetic::ReadData readdata1,readdata2;
-        // readdata1.readGridFromFile(datafile.toStdString(),datapoints1);
-        // readdata2.readGridFromFile(s.toStdString(),datapoints2);
-        // double rms = calculateRMS(datapoints1,datapoints2);
-        // ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
         ui->textBrowser->append("RMS:" + QString::number(manager.RMS));
         QCoreApplication::processEvents();
         draw_Form *draw_form_ = new draw_Form;
@@ -715,6 +700,11 @@ void ReferenceMap::on_pushButton_clicked()
         double p2, p3, p4, p5, p6, p7, p9, p10, p11;
         int ret = lssvmpso_form_->getPara(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11);
         int data_index = ui->comboBox_data->currentIndex();
+        if (data_index < 0 || data_index >= nameList_real.size())
+        {
+            QMessageBox::warning(nullptr, "错误", "请先导入实测数据后再进行该操作!");
+            return;
+        }
         QString filename = ui->lineEdit_savePath->text();
         std::string str = (projectPath+"/Measured/"+nameList_real[data_index]).toStdString();
         if (filename.isEmpty())

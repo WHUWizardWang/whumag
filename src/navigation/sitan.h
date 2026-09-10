@@ -49,15 +49,6 @@ public:
     /// 默认构造
     SitanMatching();
 
-    /// 从背景场文件构造，同时初始化卡尔曼滤波器
-//    explicit SitanMatching(const QString& backgroundFilePath);
-    SitanMatching(const QString &filePath, QWidget *parent)
-        : background(ReadBackground(filePath)),
-        kf(background) // 这里直接初始化kf
-    {
-        customPlot = new QCustomPlot(parent); // parent可以是MainWindow或其它
-    }
-
     ~SitanMatching() {
         delete customPlot;
     }
@@ -77,17 +68,6 @@ public:
                     const QVector<QPointF>& Real,
                     const QString& backgroundFile,
                     const QVector<INSData>& insdata);
-
-    /// 主流程 1：给定背景文件、INS 文件、真实轨迹文件，执行 SITAN 算法
-    void SITANAlgorithm(const QString& backgroundFile,
-                        const QString& insFile,
-                        const QString& realFile);
-
-    /// 主流程 2：给定背景文件、TERCOM 结果文件、INS 文件、真实轨迹文件，执行 SITAN 算法
-    void SITANAlgorithm(const QString& backgroundFile,
-                        const QString& tercomResultFile,
-                        const QString& insFile,
-                        const QString& realFile);
 
     /// 主流程 3：直接传入背景矩阵和 INS 数据，返回匹配后的坐标序列
     QVector<QPointF> SITANAlgorithm(const QVector<QVector<double>>& background,

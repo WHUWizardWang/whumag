@@ -101,8 +101,17 @@ void ProjectManager::Create(GMP &gmproj)
 }
 
 // Save current project to hard disk
-void ProjectManager::Save(const GMP &gmproj)
+void ProjectManager::Save(GMP &gmproj)
 {
-
+    QString proj_full_path = gmproj.Path() + "/" + gmproj.Name() + ".proj";
+    QFile proj_file(proj_full_path);
+    if (!proj_file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        qDebug() << "无法保存工程文件：" << proj_full_path;
+        return;
+    }
+    QTextStream stream(&proj_file);
+    stream << gmproj.ToString();
+    proj_file.close();
 }
 

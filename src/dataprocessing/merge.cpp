@@ -1,4 +1,5 @@
 #include "merge.h"
+#include "statsutil.h"
 
 rongHe::rongHe()
 {
@@ -24,38 +25,15 @@ void TongJi(std::vector<double>dt, std::vector<double>down)
 		[](double a, double b) { return a - b; });
 
 	// 计算统计数据
-	double max_dt = *std::max_element(dt.begin(), dt.end());
-	double min_dt = *std::min_element(dt.begin(), dt.end());
-	double sum_dt = std::accumulate(dt.begin(), dt.end(), 0.0);
-	double mean_dt = sum_dt / dt.size();
-	double sum_sq_diff_dt = std::inner_product(dt.begin(), dt.end(), dt.begin(), 0.0,
-		[](double sum, double diff) { return sum + diff * diff; },
-		[](double a, double b) { return a + b; });
-	double std_dt = std::sqrt(sum_sq_diff_dt / dt.size());
-
-	double max_down = *std::max_element(down.begin(), down.end());
-	double min_down = *std::min_element(down.begin(), down.end());
-	double sum_down = std::accumulate(down.begin(), down.end(), 0.0);
-	double mean_down = sum_down / down.size();
-	double sum_sq_diff_down = std::inner_product(down.begin(), down.end(), down.begin(), 0.0,
-		[](double sum, double diff) { return sum + diff * diff; },
-		[](double a, double b) { return a + b; });
-	double std_down = std::sqrt(sum_sq_diff_down / down.size());
-
-	double max_delt = *std::max_element(delt.begin(), delt.end());
-	double min_delt = *std::min_element(delt.begin(), delt.end());
-	double sum_delt = std::accumulate(delt.begin(), delt.end(), 0.0);
-	double mean_delt = sum_delt / delt.size();
-	double sum_sq_diff = std::inner_product(delt.begin(), delt.end(), delt.begin(), 0.0,
-		[](double sum, double diff) { return sum + diff * diff; },
-		[](double a, double b) { return a + b; });
-	double std_delt = std::sqrt(sum_sq_diff / delt.size());
+	StatsResult s_dt = computeStats(dt);
+	StatsResult s_down = computeStats(down);
+	StatsResult s_delt = computeStats(delt);
 
 	// 输出统计数据
 	std::cout << "Statistics of the difference between theoretical and computed values:\n";
-	std::cout << "Max_dongfang: " << max_dt << ", Min_dongfang: " << min_dt << ", Mean_dongfang: " << mean_dt << ", Std Dev_dongfang: " << std_dt << std::endl;
-	std::cout << "Max_FusedData: " << max_down << ", Min_FusedData: " << min_down << ", Mean_FusedData: " << mean_down << ", Std Dev_FusedData: " << std_down << std::endl;
-    qDebug() << "Max_delt: " << max_delt << ", Min_delt: " << min_delt << ", Mean_delt: " << mean_delt << ", Std Dev_delt: " << std_delt;
+	std::cout << "Max_dongfang: " << s_dt.max << ", Min_dongfang: " << s_dt.min << ", Mean_dongfang: " << s_dt.mean << ", Std Dev_dongfang: " << s_dt.stddev << std::endl;
+	std::cout << "Max_FusedData: " << s_down.max << ", Min_FusedData: " << s_down.min << ", Mean_FusedData: " << s_down.mean << ", Std Dev_FusedData: " << s_down.stddev << std::endl;
+    qDebug() << "Max_delt: " << s_delt.max << ", Min_delt: " << s_delt.min << ", Mean_delt: " << s_delt.mean << ", Std Dev_delt: " << s_delt.stddev;
 
 }
 
@@ -101,31 +79,6 @@ double rongHe::calculate_p2(double m)
 	double p2;
 	p2 = 1.0 / m / m;
 	return p2;
-}
-
-void rongHe::readfile0(std::string s)
-{
-    std::ifstream fin(s);
-    std::string line = "";
-	double m;
-	while (getline(fin, line))
-	{
-        std::string tmp = "";
-		Point point;
-		point.B = 0.0;
-		point.L = 0.0;
-		point.T = 0.0;
-        std::istringstream sline(line);
-		getline(sline, tmp, ' ');// 读入X
-		point.L = stod(tmp);
-		getline(sline, tmp, ' ');// 读入Y
-		point.B = stod(tmp);
-		getline(sline, tmp, ' ');// 读入T
-		point.T = stod(tmp);
-		point.m = 0.0;
-		point0.push_back(point);
-	}
-	fin.close();
 }
 
 void rongHe::readfile()
@@ -225,46 +178,7 @@ void rongHe::createMap(double min_B, double min_L, double max_B, double max_L,do
     double L1 = L_half - Lint;
     double L2 = L_half + Lint;
 
-    //根据中心点扩展生成容器
-    int i1 = 1;
-    while (B1 > min_B)
-    {
-        B1 = B1 - Bint;
-        i1 = i1 + 1;
-    }
-    int i2 = 1;
-    while (B2 < max_B)
-    {
-        B2 = B2 + Bint;
-        i2 = i2 + 1;
-    }
-    int row = i1 + i2 + 1;//记录内插容器行数
-    int i3 = 1;
-    while (L1 > min_L)
-    {
-        L1 = L1 - Lint;
-        i3 = i3 + 1;
-    }
-    int i4 = 1;
-    while (L2 < max_L)
-    {
-        L2 = L2 + Lint;
-        i4 = i4 + 1;
-    }
-    int col = i3 + i4 + 1;//记录内插容器列数
-
-    Point point;
-    for (int i = 0; i < row ; i++)
-    {
-        for (int j = 0; j < col; j++)
-        {
-            point.B = B1 + i * Bint;
-            point.L = L1 + j * Lint;
-            point.T = 0.0;
-            point.m = 0.0;
-            point0.push_back(point);
-        }
-    }
+    buildGrid(min_B, min_L, max_B, max_L, Bint, Lint, B1, B2, L1, L2);
 }
 void rongHe::createMap2(double min_B, double min_L, double max_B, double max_L,double Bint,double Lint)
 {
@@ -275,6 +189,10 @@ void rongHe::createMap2(double min_B, double min_L, double max_B, double max_L,d
     double L1 = Lint;
     double L2 = Lint;
 
+    buildGrid(min_B, min_L, max_B, max_L, Bint, Lint, B1, B2, L1, L2);
+}
+void rongHe::buildGrid(double min_B, double min_L, double max_B, double max_L, double Bint, double Lint, double B1, double B2, double L1, double L2)
+{
     //根据中心点扩展生成容器
     int i1 = 1;
     while (B1 > min_B)
@@ -316,31 +234,6 @@ void rongHe::createMap2(double min_B, double min_L, double max_B, double max_L,d
         }
     }
 }
-void rongHe::rongHe_run(std::string infile0, double delt_phi0, double delt_lamda0)
-{
-	// *******  读入文件  ******
-	//第一个传入的文件需要作为插值数据的格网模板
-
-    readfile0(infile0);
-	//传入待融合的多源数据文件
-    readfile();
-
-	//***** 数据融合 *****
-	data = point0;  //同步模板格网平面坐标信息
-
-	//汇总多源数据
-	allPoints(doc_points, all_point);
-
-	//构建内插模型
-	data = calModel(delt_phi0, delt_lamda0);
-
-	//***** 精度评估 *****
-	evaluatePrecision(point0, data);
-
-    std::cout << "融合程序执行完毕" << endl;
-}
-
-
 void rongHe::rongHe_run2(double delt_phi0, double delt_lamda0,
                          double min_B, double min_L, double max_B, double max_L,double Bint,double Lint)
 {

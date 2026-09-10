@@ -9,8 +9,6 @@ MapForm::MapForm(QWidget *parent) :
     qml_polygon_(new OmgQmlPolygon()),
     ui(new Ui::MapForm)
 {
-
-//    loadJson(":/Map/China.json");
     ui->setupUi(this);
     ui->quickWidget->engine()->rootContext()->setContextProperty("qmlPolygon", this->qml_polygon_);
     initQmlMap();
@@ -63,29 +61,5 @@ void MapForm::onDrawStateChanged(int state)
         default:
             break;
     }
-}
-
-void MapForm::loadJson(const QString &file_path){
-    QFile file(file_path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qWarning() << "Failed to open file for reading:" << file.errorString();
-        return;
-    }
-    QTextStream in(&file);
-    QString jsonString = in.readAll();
-    file.close();
-
-    QJsonParseError parseError;
-    QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonString.toUtf8(), &parseError);
-    if (parseError.error != QJsonParseError::NoError) {
-        qWarning() << "JSON parsing error at offset" << parseError.offset << ":" << parseError.errorString();
-        return;
-    }
-
-    QJsonObject jsonObject = jsonDoc.object();
-    QJsonValue jsonValue = jsonObject.value("features");
-    jsonObject = jsonValue[0].toVariant().toJsonObject();
-    jsonValue = jsonObject.value("geometry");
-    jsonObject = jsonValue.toVariant().toJsonObject();
 }
 

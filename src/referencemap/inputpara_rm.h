@@ -18,9 +18,6 @@ int checkAndSaveFile(const QString &folderPath,const QString &fileName);
 int inputPara_taylor(QDialog &dialog,int &order,QString &filename,
                      int &data_num,QStringList &data_name_list,int &data_index,QString dir);
 
-int inputPara_legendre(QDialog &dialog,int &order,QString &filename,
-                       int &data_num,QStringList &data_name_list,int &data_index,QString dir);
-
 int inputPara_polyhedral(QDialog &dialog,short &type,double &para,QString &filename,
                          int &data_num,QStringList &data_name_list,int &data_index,QString dir);
 

@@ -48,8 +48,14 @@ bool Project::LoadFromFile(const QString& path){
             if (str_list[0] == "Name:") name_ = str_list[1];
             else if (str_list[0] == "Path:") path_ = str_list[1];
             else if (str_list[0] == "Author:") author_ = str_list[1];
-            else if (str_list[0] == "Build") build_time_ = QDateTime::fromString(str_list[2] + " " + str_list[3], "yyyy-MM-dd hh:mm:ss");
-            else if (str_list[0] == "Last") last_update_time_ = QDateTime::fromString(str_list[3] + " " + str_list[4], "yyyy-MM-dd hh:mm:ss");
+            else if (str_list[0] == "Build") {
+                if (str_list.size() < 4) return false;
+                build_time_ = QDateTime::fromString(str_list[2] + " " + str_list[3], "yyyy-MM-dd hh:mm:ss");
+            }
+            else if (str_list[0] == "Last") {
+                if (str_list.size() < 5) return false;
+                last_update_time_ = QDateTime::fromString(str_list[3] + " " + str_list[4], "yyyy-MM-dd hh:mm:ss");
+            }
             else if (str_list[0] == "Status:") status_ = str_list[1].toInt();
         }
     } else {

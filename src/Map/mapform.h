@@ -2,12 +2,6 @@
 #define MAPFORM_H
 
 #include <QWidget>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QJsonValue>
-#include <QFile>
-#include <QTextStream>
 #include <QDebug>
 #include <QQmlContext>
 
@@ -34,8 +28,6 @@ public slots:
 
 private:
     void initQmlMap();
-    void loadJson(const QString& file_path);
-    void checkTileResources();
 
 
 

@@ -56,6 +56,10 @@ MainWindow::~MainWindow()
     delete query_form_;
     delete query_form_ano_;
     delete geomag_proj_;
+    delete database_form;
+    delete navPara_form_;
+    delete referenceMap_form_;
+    delete autoReferenceMap_form_;
     delete ui;
 }
 
@@ -144,11 +148,16 @@ void MainWindow::ProjectChanged(){
 
 void MainWindow::ProjectChanged_data()
 {
+    QTreeWidgetItem *topItem = ui->treeWidget->topLevelItem(0);
+    if (topItem == nullptr)
+    {
+        return; // No project tree yet (New/Open Project not run) - nothing to update.
+    }
     // Update children
-    int childCount = ui->treeWidget->topLevelItem(0)->child(2)->childCount();
+    int childCount = topItem->child(2)->childCount();
     for (int i = childCount - 1; i >= 0; --i)
     {
-        QTreeWidgetItem *childItem = ui->treeWidget->topLevelItem(0)->child(2)->child(i);
+        QTreeWidgetItem *childItem = topItem->child(2)->child(i);
         if (childItem != nullptr)
         {
             delete childItem;
@@ -158,7 +167,7 @@ void MainWindow::ProjectChanged_data()
     {
         QTreeWidgetItem *data_item = new QTreeWidgetItem(QStringList{str});
         data_item->setIcon(0, QIcon(":/icons/real_file.svg"));
-        ui->treeWidget->topLevelItem(0)->child(2)->addChild(data_item);
+        topItem->child(2)->addChild(data_item);
     }
     data_num = geomag_proj_->nameList_real.size();
 }
@@ -184,10 +193,15 @@ void MainWindow::ProjectChanged_processed()
         geomag_proj_->nameList_processed.append(fileInfo.fileName());
     }
     // Update children
-    int childCount = ui->treeWidget->topLevelItem(0)->child(3)->childCount();
+    QTreeWidgetItem *topItem = ui->treeWidget->topLevelItem(0);
+    if (topItem == nullptr)
+    {
+        return; // No project tree yet (New/Open Project not run) - nothing to update.
+    }
+    int childCount = topItem->child(3)->childCount();
     for (int i = childCount - 1; i >= 0; --i)
     {
-        QTreeWidgetItem *childItem = ui->treeWidget->topLevelItem(0)->child(3)->child(i);
+        QTreeWidgetItem *childItem = topItem->child(3)->child(i);
         if (childItem != nullptr)
         {
             delete childItem;
@@ -197,7 +211,7 @@ void MainWindow::ProjectChanged_processed()
     {
         QTreeWidgetItem *data_item = new QTreeWidgetItem(QStringList{str});
         data_item->setIcon(0, QIcon(":/icons/process_file.svg"));
-        ui->treeWidget->topLevelItem(0)->child(3)->addChild(data_item);
+        topItem->child(3)->addChild(data_item);
     }
 }
 
@@ -356,39 +370,36 @@ void MainWindow::on_action_taylor_build_triggered()
                                data_num,geomag_proj_->nameList_real,data_index,geomag_proj_->Path());
     if (ret == -1)
         return;
+    if (data_index < 0 || data_index >= geomag_proj_->nameList_real.size())
+    {
+        QMessageBox::warning(this, "错误", "请先导入实测数据后再进行该操作!");
+        return;
+    }
     std::string str = (geomag_proj_->Path()+"/Measured/"+geomag_proj_->nameList_real[data_index]).toStdString();
     readdata.readGridFromFile(str,datapoints);
     datainfo.Cutoff = order;
-//    readdata.interval = sparse_para*10;
     Geomagnetic::TaylorModel taylor;
     std::string s = geomag_proj_->Path().toStdString()+"/Processed/"+filename.toStdString();
-//    readdata.selectLineData(datapoints, datapoint_sparse, readdata.interval);
     datapoint_result = readdata.setDataResult(datapoints,0.5);
-    readdata.DataSet(datapoint_sparse, datainfo);
-//    for (auto& elem : datapoint_result)
-//    {
-//        elem.second.tMagnetic = 0;
-//    }
-    // ui->textBrowser->append("正在初始化...");
-    // QCoreApplication::processEvents();
-    // taylor.init(datainfo);
-    // ui->textBrowser->append("正在计算M矩阵...");
-    // QCoreApplication::processEvents();
-    // taylor.CalculateM(datapoint_sparse);
-    // ui->textBrowser->append("正在计算AQ矩阵...");
-    // QCoreApplication::processEvents();
-    // taylor.CalculateAQ(datapoint_sparse);
-    // ui->textBrowser->append("正在计算结果...");
-    // QCoreApplication::processEvents();
-    // taylor.Result(datapoint_result);
-    // ui->textBrowser->append("结果正在保存与输出...");
-    // QCoreApplication::processEvents();
-    // readdata.resultOut(datapoint_result, s);
-    // QMessageBox::information(this,"已成功保存","已成功保存在" + QString::fromStdString(s),QMessageBox::Ok);
-    // double rms = calculateRMS(datapoints,datapoint_result);
-    // ui->textBrowser->append("基于泰勒多项式方法结果计算完成\n");
-    // ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
-    //
+    readdata.DataSet(datapoints, datainfo);
+
+    ui->textBrowser->append("正在初始化...");
+    QCoreApplication::processEvents();
+    taylor.setMinMax(datapoints);
+    taylor.Normalize(datapoints);
+    taylor.Normalize(datapoint_result);
+    taylor.setCenter(datainfo.Cx, datainfo.Cy);
+    ui->textBrowser->append("正在计算结果...");
+    QCoreApplication::processEvents();
+    taylor.applyInterpolation(datapoints, datapoint_result, datainfo.Cutoff);
+    taylor.Denormalize(datapoints);
+    taylor.Denormalize(datapoint_result);
+    ui->textBrowser->append("结果正在保存与输出...");
+    QCoreApplication::processEvents();
+    readdata.resultOut(datapoint_result, s);
+    QMessageBox::information(this,"已成功保存","已成功保存在" + QString::fromStdString(s),QMessageBox::Ok);
+    ui->textBrowser->append("基于泰勒多项式方法结果计算完成\n");
+
     ProjectChanged_processed();
     //
     draw_Form *draw_form_ = new draw_Form;
@@ -602,6 +613,7 @@ void MainWindow::on_action_lssvmpso_build_triggered()
     readdata.readGridFromFile(str,datapoints);
     QString s = geomag_proj_->Path()+"/Processed/"+filename;
     Geomagnetic::LSSVMPSO lssvmpso;
+    lssvmpso.setPara();   // 初始化PSO工作状态(vGroup/粒子边界等)，防止run()内RandomlyInitial()访问未初始化数据
 //    readdata.interval = sparse_para *10;
     Geomagnetic::Datapoint alldatapoint;
     Geomagnetic::Datapoint Traindatapoint;
@@ -1199,14 +1211,6 @@ void MainWindow::on_actionSITAN_triggered()
     // 设置背景图的分辨率，根据out.txt
     ui->textBrowser->append("SITAN匹配导航计算开始...");
     QCoreApplication::processEvents();
-//    Geomagnetic::SitanMatching st;
-//    st.SITANAlgorithm(navPara_form_->backGFile,
-//                      navPara_form_->INSFile,
-//                      navPara_form_->realFile);
-//    ui->textBrowser->append("SITAN匹配导航计算完毕!");
-//    QCoreApplication::processEvents();
-//    ui->textBrowser->append("TERCOM匹配导航RMS: "+QString::number(my.finalRMS) + " km");
-//    QCoreApplication::processEvents();
 }
 
 void MainWindow::on_action_TERCOM_ICCP_triggered()
@@ -1262,7 +1266,6 @@ void MainWindow::on_action_suball_triggered()
     auto start = std::chrono::high_resolution_clock::now(); // 获取当前时间点
     std::string infile = (geomag_proj_->Path()+"/Measured/"+geomag_proj_->nameList_real[data_index]).toStdString();
     readdata.readGridFromFile(infile,datapoints);
-//    sub.subareaAll(datapoints,datainfo,datapoint_sparse,x_step,y_step,outfile);
     readdata.selectLineData(datapoints, datapoint_sparse, (int)sub.y_step*10);
     sub.subarea(datapoints,datainfo,datapoint_sparse);
     sub.build(datapoints,datainfo,datapoint_sparse,filename);
@@ -2176,7 +2179,7 @@ void MainWindow::on_action_3_triggered()
         return;
     }
 
-    MagneticComplexityAnalyzer *mca = new MagneticComplexityAnalyzer;
+    MagneticComplexityAnalyzer mca;
     GridData gridData;
     ReadData readdata;
     Datainfo datainfo;
@@ -2199,7 +2202,6 @@ void MainWindow::on_action_3_triggered()
     }
     CubicInterpolator2D interpolator(x,y,z,200);
     std::vector<double> zz = interpolator.interpolate(xx,yy);
-//    std::vector<double> zz = interpolator.interpolateGridWithEigen(x, y, z, xx, yy);
     datapoints1.clear();
     //将xx,yy,zz存入datapoints1
     for(int i=0;i<xx.size();i++)
@@ -2217,14 +2219,14 @@ void MainWindow::on_action_3_triggered()
     int jumpSize = subareaSize;
     ui->textBrowser->append("复杂度处理中...");
     QCoreApplication::processEvents();
-    ComplexityResult result = mca->analyzeComplexityChunked(datapoints1,gridSize,jumpSize);
+    ComplexityResult result = mca.analyzeComplexityChunked(datapoints1,gridSize,jumpSize);
     QFileDialog dialog_save(this);
     dialog_save.setAcceptMode(QFileDialog::AcceptSave);
     dialog_save.setDefaultSuffix("csv");
     QString filename = dialog_save.getSaveFileName(this, tr("保存分析结果"), "", tr("CSV文件 (*.csv)"));
 
     if (!filename.isEmpty()) {
-        if (mca->exportToFile(result, filename)) {
+        if (mca.exportToFile(result, filename)) {
             QMessageBox::information(this, tr("导出成功"), tr("分析结果已保存到 %1").arg(filename));
         } else {
             QMessageBox::warning(this, tr("导出失败"), tr("无法写入文件 %1").arg(filename));
@@ -2232,7 +2234,7 @@ void MainWindow::on_action_3_triggered()
     }
 
     // 显示复杂度热图
-    mca->showComplexityMap(result,jumpSize);
+    mca.showComplexityMap(result,jumpSize);
 
     // 显示测线间距热图
     // mca->showSpacingMap(result,jumpSize);

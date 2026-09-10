@@ -19,8 +19,7 @@ public:
 
     static bool Load(GMP& gmproj, const QString& path);
     static void Create(GMP& gmproj);
-    static void Save(const GMP& gmproj);
-    static void Move(GMP& gmproj, const QString& original_path, const QString& destination_path);
+    static void Save(GMP& gmproj);
 };
 
 #endif // PROJECTMANAGER_H

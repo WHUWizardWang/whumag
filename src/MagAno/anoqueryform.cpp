@@ -134,6 +134,7 @@ void AnoQueryForm::on_pushButton_3_clicked()
             ret = MagAnoQuery::omg_emag2(ano_pnts);
             if (ano_pnts.size()>4){
             draw_Form *draw_form_ = new draw_Form;
+            draw_form_->setAttribute(Qt::WA_DeleteOnClose);
             QVector<double> xx,yy,zz;
             draw_form_->create_xyz_p(ano_pnts,xx,yy,zz);
             draw_form_->autoset_heatMapView(xx,yy,zz);
@@ -146,6 +147,7 @@ void AnoQueryForm::on_pushButton_3_clicked()
             ret = MagAnoQuery::omg_mamea(ano_pnts);
             if (ano_pnts.size()>4){
             draw_Form *draw_form_ = new draw_Form;
+            draw_form_->setAttribute(Qt::WA_DeleteOnClose);
             QVector<double> xx,yy,zz;
             draw_form_->create_xyz_p(ano_pnts,xx,yy,zz);
             draw_form_->autoset_heatMapView(xx,yy,zz);

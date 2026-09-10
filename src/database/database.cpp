@@ -28,8 +28,8 @@ database::database(QWidget *parent) :
         ui->tableView->setModel(model);
         // 显示model里面的语句
         model->select();
-        ui->tableView->setItemDelegateForColumn(0,new EnumComboBoxDelegate1(model));
-        ui->tableView->setItemDelegateForColumn(8,new EnumComboBoxDelegate2(model));
+        ui->tableView->setItemDelegateForColumn(0,new EnumComboBoxDelegate({{"实测数据","实测数据"},{"处理后数据","处理后数据"}}, model));
+        ui->tableView->setItemDelegateForColumn(8,new EnumComboBoxDelegate({{"船磁","船磁"},{"航磁","航磁"},{"水下磁测","水下磁测"}}, model));
         model->setHeaderData(0,Qt::Horizontal,"数据类型");
         model->setHeaderData(1,Qt::Horizontal,"数据名称");
         model->setHeaderData(2,Qt::Horizontal,"保存路径");
@@ -144,14 +144,13 @@ void database::on_pushButton_show_clicked()
         QVector<double> xx,yy,zz;
         QString filepath = model->data(model->index(list.at(i).row(),2)).toString();
         draw_form_->create_xyz_f(filepath,xx,yy,zz);
-//        draw_form_->set_HeatOrSactterView(xx,yy,zz);
         draw_form_->autoset_heatMapView(xx,yy,zz);
         if (!draw_form_->magWarn)
-            return;
-        if (proPath.isEmpty())
-            draw_form_->autoset_contourView(xx,yy,zz);
-        else
-            draw_form_->autoset_contourView(xx,yy,zz);
+        {
+            delete draw_form_;
+            continue;
+        }
+        draw_form_->autoset_contourView(xx,yy,zz);
         draw_form_->show();
     }
 }
@@ -272,7 +271,10 @@ void database::openData(QString filePath,double &xmin,double &xmax,double &ymin,
     QVector<double> xx,yy,vv;
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-           return;
+    {
+        xmin = xmax = ymin = ymax = 0.0;
+        return;
+    }
     QTextStream in(&file);
     int index=0;
     while (!in.atEnd())
@@ -300,6 +302,12 @@ void database::openData(QString filePath,double &xmin,double &xmax,double &ymin,
         vv.append(value);
     }
     file.close();
+    if (xx.isEmpty() || yy.isEmpty())
+    {
+        QMessageBox::warning(this, tr("提示"), tr("文件中未找到有效的数值数据: %1").arg(filePath));
+        xmin = xmax = ymin = ymax = 0;
+        return;
+    }
     xmin = *std::min_element(std::begin(xx),std::end(xx));
     xmax = *std::max_element(std::begin(xx),std::end(xx));
     ymin = *std::min_element(std::begin(yy),std::end(yy));

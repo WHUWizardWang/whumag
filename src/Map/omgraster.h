@@ -17,7 +17,6 @@ class OmgRaster //: public QObject
 public:
     //    explicit OmgRaster(QObject *parent = nullptr);
     OmgRaster();
-    OmgRaster(const OmgRaster &other);
 
     float latResolution() const;
     float lonResolution() const;
@@ -39,14 +38,14 @@ private:
     int getColorIndex(float value);
 
 
-    float m_left_top_lat;
-    float m_left_top_lon;
-    float m_lat_resolution;
-    float m_lon_resolution;
-    float m_height;
-    float m_width;
-    float m_maxValue;
-    float m_minValue;
+    float m_left_top_lat = 0.0f;
+    float m_left_top_lon = 0.0f;
+    float m_lat_resolution = 0.0f;
+    float m_lon_resolution = 0.0f;
+    float m_height = 0.0f;
+    float m_width = 0.0f;
+    float m_maxValue = 0.0f;
+    float m_minValue = 0.0f;
     QVector<float> m_data;
     QVector<QVector3D> m_colorMap;
 

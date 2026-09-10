@@ -33,8 +33,8 @@ constexpr auto DEBUG = 0;
 		double lon;
 		double height;
 
-		double X;
-		double Y;
+		double X=0;
+		double Y=0;
 		double Z=0;
 
         int index = 0;

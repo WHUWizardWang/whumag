@@ -60,11 +60,9 @@ SOURCES += \
     src/dataprocessing/Time_TongHua.cpp \
     src/dataprocessing/accuracy.cpp \
     src/dataprocessing/extension.cpp \
-    src/dataprocessing/fftw.cpp \
     src/dataprocessing/inputpara_dp.cpp \
     src/dataprocessing/merge.cpp \
     src/dataprocessing/mergeform.cpp \
-    src/dataprocessing/readFile.cpp \
     src/draw/draw_form.cpp \
     src/app/geomagnetismproject.cpp \
     src/app/help.cpp \
@@ -92,10 +90,8 @@ SOURCES += \
     src/referencemap/globalmodel/mapsplineform.cpp \
     src/referencemap/globalmodel/referencemap.cpp \
     src/referencemap/inputpara_rm.cpp \
-    src/subarea/subarea.cpp \
     src/subarea/subareablocks.cpp \
     src/app/utils.cpp \
-    src/wmm/GeomagInteractiveLib.c \
     src/wmm/GeomagnetismLibrary.c \
     src/wmm/igrf_point.c \
     src/wmm/magcalc.c \
@@ -148,14 +144,11 @@ HEADERS += \
     src/dataprocessing/Time_TongHua.h \
     src/dataprocessing/accuracy.h \
     src/dataprocessing/extension.h \
-    src/dataprocessing/fftw.h \
     src/dataprocessing/inputpara_dp.h \
     src/dataprocessing/merge.h \
     src/dataprocessing/mergeform.h \
-    src/dataprocessing/readFile.h \
     src/draw/draw_form.h \
     third_party/qcustomplot/qcustomplot.h \
-    src/draw/spline.h \
     src/app/eigenqdebug.h \
     src/app/geomagnetismproject.h \
     src/app/gmparameters.h \
@@ -187,11 +180,9 @@ HEADERS += \
     src/referencemap/globalmodel/referencemap.h \
     src/referencemap/inputpara_rm.h \
     src/referencemap/stable.h \
-    src/subarea/subarea.h \
     src/subarea/subareablocks.h \
     src/app/utils.h \
     src/wmm/EGM9615.h \
-    src/wmm/GeomagInterativeLib.h \
     src/wmm/GeomagnetismHeader.h \
     src/wmm/OmgValidator.h \
     src/wmm/igrf_point.h \

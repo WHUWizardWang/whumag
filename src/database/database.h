@@ -27,11 +27,12 @@ class database;
 }
 
     // 自定义委托类
-    class EnumComboBoxDelegate1 : public QStyledItemDelegate {
+    class EnumComboBoxDelegate : public QStyledItemDelegate {
         Q_OBJECT
 
     public:
-        EnumComboBoxDelegate1(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
+        explicit EnumComboBoxDelegate(QMap<QString,QString> datatype, QObject *parent = nullptr)
+            : QStyledItemDelegate(parent), datatype(datatype) {}
 
         QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &) const override {
             QComboBox *comboBox = new QComboBox(parent);
@@ -58,49 +59,7 @@ class database;
             model->setData(index, QVariant(static_cast<QString>(selectedEnum)), Qt::EditRole);
         }
     private:
-        QMap<QString,QString> datatype = {
-            {"实测数据","实测数据"},
-            {"处理后数据","处理后数据"}
-        };
-    };
-
-    // 自定义委托类
-    class EnumComboBoxDelegate2 : public QStyledItemDelegate {
-        Q_OBJECT
-
-    public:
-        EnumComboBoxDelegate2(QObject *parent = nullptr) : QStyledItemDelegate(parent) {}
-
-        QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &, const QModelIndex &) const override {
-            QComboBox *comboBox = new QComboBox(parent);
-            foreach(const QString &str,datatype.keys())
-            {
-                comboBox->addItem(str,datatype.value(str));
-            }
-            return comboBox;
-        }
-
-        void setEditorData(QWidget *editor, const QModelIndex &index) const override {
-            QComboBox *comboBox = static_cast<QComboBox *>(editor);
-            QString currentValue = static_cast<QString>(index.data(Qt::EditRole).toInt());
-            int currentIndex = comboBox->findData(QVariant::fromValue(currentValue));
-            if (currentIndex >= 0) {
-                comboBox->setCurrentIndex(currentIndex);
-            }
-        }
-
-        void setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const override {
-            QComboBox *comboBox = static_cast<QComboBox *>(editor);
-            QVariant enumValue = comboBox->currentData();
-            QString selectedEnum = enumValue.value<QString>();
-            model->setData(index, QVariant(static_cast<QString>(selectedEnum)), Qt::EditRole);
-        }
-    private:
-        QMap<QString,QString> datatype = {
-            {"船磁","船磁"},
-            {"航磁","航磁"},
-            {"水下磁测","水下磁测"}
-        };
+        QMap<QString,QString> datatype;
     };
 
 class database : public QWidget

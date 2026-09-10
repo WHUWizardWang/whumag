@@ -101,28 +101,6 @@ void AutoReferenceMap::on_comboBox_height_currentIndexChanged(int index)
     }
 }
 
-double AutoReferenceMap::calculateRMS(const Geomagnetic::Datapoint &datapoints,
-                                const Geomagnetic::Datapoint &dataresults)
-{
-    double sumSquaredError = 0.0;
-    int count = 0;
-
-    for (const auto& [key, datapoint] : datapoints)
-    {
-        auto it = dataresults.find(key);
-        if (it != dataresults.end())
-        {
-            double error = datapoint.tMagnetic - it->second.tMagnetic;
-            sumSquaredError += error * error;
-            ++count;
-        }
-    }
-
-    if (count == 0) return 0.0;
-    return std::sqrt(sumSquaredError / count);
-}
-
-
 void AutoReferenceMap::on_pushButton_clicked()
 {
     dx = this->ui->doubleSpinBox_dx->value();
@@ -142,7 +120,6 @@ void AutoReferenceMap::on_pushButton_clicked()
                     delete item;
                 }
             }
-            int data_index = ui->comboBox_data->currentIndex();
             QString filename = ui->lineEdit_savePath->text();
             if (filename.isEmpty())
             {
@@ -237,7 +214,6 @@ void AutoReferenceMap::on_pushButton_clicked()
                     delete item;
                 }
             }
-            int data_index = ui->comboBox_data->currentIndex();
             QString filename = ui->lineEdit_savePath->text();
             if (filename.isEmpty())
             {
@@ -330,7 +306,6 @@ void AutoReferenceMap::on_pushButton_clicked()
                     delete item;
                 }
             }
-            int data_index = ui->comboBox_data->currentIndex();
             QString filename = ui->lineEdit_savePath->text();
             if (filename.isEmpty())
             {
@@ -421,7 +396,6 @@ void AutoReferenceMap::on_pushButton_clicked()
                     delete item;
                 }
             }
-            int data_index = ui->comboBox_data->currentIndex();
             QString filename = ui->lineEdit_savePath->text();
             if (filename.isEmpty())
             {
@@ -503,7 +477,7 @@ void AutoReferenceMap::on_pushButton_clicked()
 
         case 4: // 750m
         {
-            QLayout *lay = ui->widget_pic3->layout();
+            QLayout *lay = ui->widght_pic4->layout();
             if (lay)
             {
                 QLayoutItem *item;
@@ -513,7 +487,6 @@ void AutoReferenceMap::on_pushButton_clicked()
                     delete item;
                 }
             }
-            int data_index = ui->comboBox_data->currentIndex();
             QString filename = ui->lineEdit_savePath->text();
             if (filename.isEmpty())
             {
@@ -589,7 +562,7 @@ void AutoReferenceMap::on_pushButton_clicked()
             if(draw_form_->magWarn == false)
                 return;
             draw_form_->autoset_contourView(xx,yy,zz);
-            ui->widget_pic3->layout()->addWidget(draw_form_);
+            ui->widght_pic4->layout()->addWidget(draw_form_);
             break;
         }
 

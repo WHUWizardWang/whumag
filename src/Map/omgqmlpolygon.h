@@ -37,39 +37,30 @@ class OmgQmlPolygon: public QObject
     Q_PROPERTY(qreal lonRsl READ lonRsl WRITE setLonRsl)
     Q_PROPERTY(qreal maxLat READ maxLat WRITE setMaxLat)
     Q_PROPERTY(qreal minLon READ minLon WRITE setMinLon)
-    Q_PROPERTY(QVariantList points READ points WRITE setPoints)
 
 public:
     OmgQmlPolygon(QObject *parent = nullptr);
-    OmgQmlPolygon(const OmgQmlPolygon &polygon);
+    OmgQmlPolygon(const OmgQmlPolygon &polygon) = delete;
+    OmgQmlPolygon &operator=(const OmgQmlPolygon &polygon) = delete;
     ~OmgQmlPolygon();
 
     qreal latRsl() const;
     qreal lonRsl() const;
     qreal maxLat() const;
     qreal minLon() const;
-    const QVariantList &points() const;
 
     void setLatRsl(qreal lat_rsl);
     void setLonRsl(qreal lon_rsl);
     void setMaxLat(qreal max_lat);
     void setMinLon(qreal min_lon);
-    void setPoints(const QVariantList &pnts);
 
     OmgQmlPoint pointConvertToQml(const OmgGeoPoint &geoPnt);
     void addPoint(const OmgQmlPoint &pnt);
-    void clear();
 
     Q_INVOKABLE void addNode(qreal lat, qreal lon);
     Q_INVOKABLE void clearNodes();
 
     Q_INVOKABLE void getInertnalPoints(int flag);
-    Q_INVOKABLE int pointCount();
-    Q_INVOKABLE qreal pointLat(int index);
-    Q_INVOKABLE qreal pointLon(int index);
-    Q_INVOKABLE qreal pointRed(int index);
-    Q_INVOKABLE qreal pointGreen(int index);
-    Q_INVOKABLE qreal pointBlue(int index);
     Q_INVOKABLE void setRadio(qreal radio);
     Q_INVOKABLE QString getResImgPath();
     Q_INVOKABLE QString loadChinaBorder();
@@ -93,7 +84,6 @@ private:
     qreal m_min_lon;
     qreal m_radio;
     QVariantList m_points;
-    QVector<OmgGeoPoint> m_pnts;
     QVector<Vec2d> m_polygon;
     OmgRaster m_raster_emag2;   // tiff
     OmgRaster m_raster_mamea;   // xym

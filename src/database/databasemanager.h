@@ -31,7 +31,11 @@ public:
         db.setHostName("localhost");
         db.setDatabaseName("whumag");
         db.setUserName("postgres");
-        db.setPassword("010915");
+        QString pwd = qEnvironmentVariable("WHUMAG_DB_PASSWORD");
+        if (pwd.isEmpty()) {
+            qDebug() << "WHUMAG_DB_PASSWORD not set; falling back to parameterized initConnection() is required.";
+        }
+        db.setPassword(pwd);
         db.setPort(5432);
 
         bool ok = db.open();

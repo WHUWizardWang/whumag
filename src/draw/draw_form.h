@@ -13,6 +13,7 @@
 #include <QMessageBox>
 #include <QColor>
 #include <QProcess>
+#include <functional>
 #include "MagAno/OmgValidator.h"
 #include "qcustomplot.h"
 #include "contourplotter.h"
@@ -28,23 +29,18 @@ class draw_Form : public QWidget
 public:
     explicit draw_Form(QWidget *parent = nullptr);
     ~draw_Form();
-    void set_HeatOrSactterView(QVector<double> xx,QVector<double> yy,QVector<double> result);
     void set_heatMapView(QVector<double> xx,QVector<double> yy,QVector<double> result);
     void autoset_heatMapView(QVector<double> xx,QVector<double> yy,QVector<double> result);
     void autoset_contourView(QVector<double> xx,QVector<double> yy,QVector<double> result);
-    std::pair<double, double> findMinMax(const QVector<QVector<double>>& vec);
-    double findDifferenceInArithmeticSequence(const QVector<double>& sequence);
     void create_xyz_p(QVector<AnoPoint> ano_pnts,QVector<double> &xx,QVector<double> &yy,QVector<double> &result);
     void create_xyz_f(QString filename,QVector<double> &xx,QVector<double> &yy,QVector<double> &result);
     void set_ContourView(QString filename);
-    void create_contour_txt(QVector<AnoPoint> &ano_pnts);
-    int findClosestIndex(const QList<double>& sortedValues, double target);
     void setMapStep(double dx,double dy);
     QString con_path;
 
     //格网分辨率
-    double x_step;
-    double y_step;
+    double x_step = 0.0;
+    double y_step = 0.0;
     //是否插值
     int type;
     // 是否报错,false为存在错误
@@ -56,6 +52,11 @@ private slots:
     void on_pushButton_save_clicked();
 
 private:
+    QCustomPlot* buildHeatmapPlot(int cols, int rows,
+                                   double minX, double maxX, double minY, double maxY,
+                                   double minZ, double maxZ,
+                                   const std::function<double(int row, int col)> &valueAt,
+                                   QCPColorScale **outColorScale = nullptr);
     Ui::draw_Form *ui;
 };
 

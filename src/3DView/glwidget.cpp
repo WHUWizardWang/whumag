@@ -159,6 +159,14 @@ void GLWidget::setupVertexAttribs()
     m_terrainVbo.release();
 }
 
+void GLWidget::uploadTerrainToGpu()
+{
+    m_terrainVbo.bind();
+    m_terrainVbo.allocate(m_terrain_ptr->constData(), m_terrain_ptr->count() * sizeof(GLfloat));
+    setupVertexAttribs();
+    update();
+}
+
 void GLWidget::load()
 {
     m_hasTexture = false;
@@ -172,42 +180,7 @@ void GLWidget::load()
     m_terrain_ptr->setTerrainColorMap(m_colorMap);
     m_terrain_ptr->setMaganoColorMap(m_colorMapMap["hot"]);
     m_terrain_ptr->load();
-    m_terrainVbo.bind();
-    m_terrainVbo.allocate(m_terrain_ptr->constData(), m_terrain_ptr->count() * sizeof(GLfloat));
-    setupVertexAttribs();
-    update();
-    toDefaultView();
-}
-
-void GLWidget::loadNewTerrain(const QVector<double> &pnts, int width, int height, double scale)
-{
-    m_hasTexture = false;
-    m_closeTexture = true;
-    emit hasTextureChanged(m_hasTexture);
-
-    QVector<QVector3D> color(pnts.size(), QVector3D(0, 0, 0));
-    m_scale = scale;
-    m_terrain_ptr->load(pnts, width, height, color);
-    m_terrainVbo.bind();
-    m_terrainVbo.allocate(m_terrain_ptr->constData(), m_terrain_ptr->count() * sizeof(GLfloat));
-    setupVertexAttribs();
-    update();
-    toDefaultView();
-}
-
-void GLWidget::loadNewTerrain(const QVector<double> &pnts, int width, int height, double scale,
-                              const QVector<QVector3D> &colors)
-{
-    m_hasTexture = true;
-    m_closeTexture = false;
-    emit hasTextureChanged(m_hasTexture);
-
-    m_scale = scale;
-    m_terrain_ptr->load(pnts, width, height, colors);
-    m_terrainVbo.bind();
-    m_terrainVbo.allocate(m_terrain_ptr->constData(), m_terrain_ptr->count() * sizeof(GLfloat));
-    setupVertexAttribs();
-    update();
+    uploadTerrainToGpu();
     toDefaultView();
 }
 
@@ -449,10 +422,7 @@ void GLWidget::myUpdate()
     m_terrain_ptr->setTerrainColorMap(m_colorMap);
     m_terrain_ptr->setMaganoColorMap(m_magColorMap);
     m_terrain_ptr->load();
-    m_terrainVbo.bind();
-    m_terrainVbo.allocate(m_terrain_ptr->constData(), m_terrain_ptr->count() * sizeof(GLfloat));
-    setupVertexAttribs();
-    update();
+    uploadTerrainToGpu();
     //    toDefaultView();
 }
 

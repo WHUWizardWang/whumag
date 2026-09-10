@@ -106,27 +106,20 @@ namespace Geomagnetic {
 		}
         void setMinMax(Datapoint& datapoint)
         {
-            lon_max = std::numeric_limits<double>::min();
+            lon_max = std::numeric_limits<double>::lowest();
             lon_min = std::numeric_limits<double>::max();
-            lat_max = std::numeric_limits<double>::min();
+            lat_max = std::numeric_limits<double>::lowest();
             lat_min = std::numeric_limits<double>::max();
             for (auto& entry : datapoint)
             {
-                lon_max = std::numeric_limits<double>::lowest();
-                lon_min = std::numeric_limits<double>::max();
-                lat_max = std::numeric_limits<double>::lowest();
-                lat_min = std::numeric_limits<double>::max();
-                for (auto& entry : datapoint)
-                {
-                    if (entry.second.lon > lon_max)
-                        lon_max = entry.second.lon;
-                    if (entry.second.lon < lon_min)
-                        lon_min = entry.second.lon;
-                    if (entry.second.lat > lat_max)
-                        lat_max = entry.second.lat;
-                    if (entry.second.lat < lat_min)
-                        lat_min = entry.second.lat;
-                }
+                if (entry.second.lon > lon_max)
+                    lon_max = entry.second.lon;
+                if (entry.second.lon < lon_min)
+                    lon_min = entry.second.lon;
+                if (entry.second.lat > lat_max)
+                    lat_max = entry.second.lat;
+                if (entry.second.lat < lat_min)
+                    lat_min = entry.second.lat;
             }
         }
         //归一化函数
@@ -449,18 +442,6 @@ namespace Geomagnetic {
     };
 
 
-	class MomentHarmonic : public GeomangeticModel
-	{
-	public:
-		MomentHarmonic();
-		void init();
-		void CoordTransform(Datapoint& datapoint);
-		void ComputeCoef();
-		void Compute();
-		void GridConstruction(Datapoint& dataresult);
-	};
-
-
     class OptimizedCubicInterpolator
     {
     public:
@@ -479,23 +460,21 @@ namespace Geomagnetic {
             const std::vector<double>& xi,  // 查询点x坐标
             const std::vector<double>& yi   // 查询点y坐标
             );
-        static std::vector<double> idw_interpolate(
-            const std::vector<double>& x,   // 输入点x坐标
-            const std::vector<double>& y,   // 输入点y坐标
-            const std::vector<double>& z,   // 输入点对应的值
-            const std::vector<double>& xi,  // 查询点x坐标
-            const std::vector<double>& yi   // 查询点y坐标
-            );
-        std::vector<double> interpolateGridWithEigen(
-            const std::vector<double>& x,
-            const std::vector<double>& y,
-            const std::vector<double>& z,
-            const std::vector<double>& xx,
-            const std::vector<double>& yy);
     private:
         // 计算径向基函数值
         static double rbf(double r);
         static double cubicInterpolate(double p0, double p1, double p2, double p3, double t);
+
+        // interpolate/cubic_interpolate共享实现，按阈值/块大小/日志详略参数化
+        static std::vector<double> interpolateImpl(
+            const std::vector<double>& x,
+            const std::vector<double>& y,
+            const std::vector<double>& z,
+            const std::vector<double>& xi,
+            const std::vector<double>& yi,
+            int smallThreshold, int mediumThreshold,
+            int mediumBlock, int largeBlock, int fallbackBlock,
+            bool verbose);
 
         // 块处理插值
         static std::vector<double> blockInterpolate(

@@ -77,27 +77,11 @@ void AUTONAV::readINSFile(const QString &filePath) {
 
 void AUTONAV::readTruePathFile(const QString &filePath) {
     truePath.clear();
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qWarning() << "readTruePathFile: 无法打开文件：" << filePath;
-        return;
+    const QVector<QPointF> pts = readPointsFromFile(filePath);
+    truePath.reserve(pts.size());
+    for (const QPointF &p : pts) {
+        truePath.push_back(TruePath{p.x(), p.y()});
     }
-    QTextStream in(&file);
-    while (!in.atEnd()) {
-        QString line = in.readLine().trimmed();
-        if (line.isEmpty()) continue;
-        QStringList fld = line.split(QRegExp("[,\\s]+"), Qt::SkipEmptyParts);
-        if (fld.size() < 2) continue;
-        bool okX, okY;
-        double xx = fld[0].toDouble(&okX);
-        double yy = fld[1].toDouble(&okY);
-        if (!okX || !okY) continue;
-        TruePath tp;
-        tp.x = xx;
-        tp.y = yy;
-        truePath.push_back(tp);
-    }
-    file.close();
 }
 
 //---------------------------

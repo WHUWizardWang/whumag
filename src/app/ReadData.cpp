@@ -42,60 +42,6 @@ namespace Geomagnetic {
         gpsSeconds = (JD_since_epoch - static_cast<double>(gpsWeek) * 7.0) * 86400.0;
     }
 
-    // Read the data from file and fill the map
-    bool ReadData::readDataFromFile(const std::string& filename, Datapoint& datapoints) {
-        std::ifstream file(filename);
-
-        if (!file.is_open()) {
-            std::cerr << "Failed to open file." << endl;
-            return false;
-        }
-
-        std::string line;
-        // Skip header
-        getline(file, line);
-
-        // Read each line
-        while (getline(file, line)) {
-            std::istringstream iss(line);
-            std::string dateStr, timeStr;
-            double mag1, depth1, lon, lat, height;
-
-            if (!(iss >> dateStr >> timeStr >> mag1 >> depth1 >> lon >> lat >> height)) {
-                std::cerr << "Error parsing line." << endl;
-                continue;  // Skip malformed line
-            }
-
-            // Parse date and time
-            int month, day, year;
-            int hour, minute, second;
-            char dummy;
-
-            std::istringstream(dateStr) >> month >> dummy >> day >> dummy >> year;
-            year += 2000; // Since the format provided gives only two digits for the year
-            std::istringstream(timeStr) >> hour >> dummy >> minute >> dummy >> second;
-            TimeTrans timetrans;
-            double JD = timetrans.calendarDateToJulianDate(year, month, day, hour, minute, second);
-            int gpsWeek;
-            double gpsSeconds;
-            timetrans.JulianDateToGPS(JD, gpsWeek, gpsSeconds);
-
-            SinglePoint point;
-            point.gpsWeek = gpsWeek;
-            point.gpsSeconds = gpsSeconds;
-            point.tMagnetic = mag1;  // Assuming mag1 corresponds to tMagnetic
-            point.lon = lon;
-            point.lat = lat;
-            point.height = height;
-
-            // Store the point using the GPS seconds as key
-            datapoints.insert(std::make_pair(gpsSeconds, point));
-        }
-
-        file.close();
-        return true;
-    }
-
     bool ReadData::readGridFromFile(const std::string& filename, Datapoint& datapoints)
     {
         std::ifstream file(filename);
@@ -232,6 +178,7 @@ namespace Geomagnetic {
         datainfo.Clat = totalLat / datainfo.DataNum;
     }
     void ReadData::selectRandomData(const Datapoint& allData, Datapoint& data_sparse, int n) {
+        if (n <= 0) return;   // guard against divide-by-zero at keys.size()/n below
         // 设置随机数生成器
         std::random_device rd;
         std::mt19937 g(rd());
@@ -252,6 +199,7 @@ namespace Geomagnetic {
     }
     void ReadData::selectLineData(const Datapoint& allData, Datapoint& train, int n)
     {
+        if (n <= 0) return;   // guard against modulo-by-zero below
         for (auto& elem : allData)
         {
             if (int(elem.second.Y*10+0.1) % n < 1 || int(elem.second.Y*10-0.1) % n < 1)
@@ -259,16 +207,6 @@ namespace Geomagnetic {
 				train.insert(elem);
 			}
 		}
-    }
-    void ReadData::selectLineData_sub(const Datapoint& allData, Datapoint& train, int n)
-    {
-        for (auto& elem : allData)
-        {
-            if (int(elem.second.Y*10+0.1) % n < 1 || int(elem.second.Y*10-0.1) % n < 1)
-            {
-                train.insert(elem);
-            }
-        }
     }
     void ReadData::resultOut(const Datapoint& dataresult, const std::string& filename)
     {
@@ -306,18 +244,6 @@ namespace Geomagnetic {
         // 关闭文件
         outputFile1.close();
         std::cout << "数据已成功写入文件 " << filename << std::endl;
-    }
-    void ReadData::getDatarowcol(std::vector<double>X, std::vector<double>Y, std::vector<double>T, int& row, int& col,double step_x,double step_y)
-    {
-        double minX = *std::min_element(X.begin(), X.end());
-        double maxX = *std::max_element(X.begin(), X.end());
-        double minY = *std::min_element(Y.begin(), Y.end());
-        double maxY = *std::max_element(Y.begin(), Y.end());
-
-        // 计算行数和列数
-        row = static_cast<int>((maxY - minY) / step_y) + 1;
-        col = static_cast<int>((maxX - minX) / step_x) + 1;
-
     }
     void CoordTrans::BLH2XYZ(Datapoint& datapoint)
     {
@@ -391,23 +317,6 @@ namespace Geomagnetic {
                     train.insert(elem);
                 }
                 all.insert(elem);
-            }
-        }
-
-    void ReadData::selectLineData1(const Datapoint& allData, Datapoint& train, Datapoint& test,Datapoint& all)
-        {
-        int flag =0;
-            for (auto& elem : allData)
-            {
-                flag++;
-                if (flag % 10 < 1)
-                {
-                    train.insert(elem);
-                }
-                else
-                {
-                    test.insert(elem);
-                }
             }
         }
 
@@ -500,80 +409,89 @@ namespace Geomagnetic {
 
             while (getline(fin, line))
             {
-                std::string tmp = "";
-                linePoints P;
+                try
+                {
+                    std::string tmp = "";
+                    linePoints P;
 
-                std::istringstream sline(line);
+                    std::istringstream sline(line);
 
-                //****** 获取原始文件信息 ******
-                getline(sline, tmp, ',');
-                P.docID = i;
+                    //****** 获取原始文件信息 ******
+                    getline(sline, tmp, ',');
+                    P.docID = i;
 
-                getline(sline, tmp, ',');
-                P.year = stoi(tmp.substr(0, 4));
-                P.month = stoi(tmp.substr(5, 2));
-                P.day = stoi(tmp.substr(8, 2));
+                    getline(sline, tmp, ',');
+                    P.year = stoi(tmp.substr(0, 4));
+                    P.month = stoi(tmp.substr(5, 2));
+                    P.day = stoi(tmp.substr(8, 2));
 
-                getline(sline, tmp, ',');
-                P.hour = stoi(tmp.substr(0, 2));
-                P.min = stoi(tmp.substr(3, 2));
-                P.sec = stod(tmp.substr(6, 6));
+                    getline(sline, tmp, ',');
+                    P.hour = stoi(tmp.substr(0, 2));
+                    P.min = stoi(tmp.substr(3, 2));
+                    P.sec = stod(tmp.substr(6, 6));
 
-                getline(sline, tmp, ',');
-                P.Tm = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.Tm = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.G = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.G = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.depth = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.depth = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.L = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.L = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.B = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.B = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.V = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.V = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.heading = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.heading = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.T1 = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.T1 = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.v = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.v = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.T2 = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.T2 = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.adjust = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.adjust = stod(tmp);
 
-                getline(sline, tmp, ',');
-                P.T3 = stod(tmp);
+                    getline(sline, tmp, ',');
+                    P.T3 = stod(tmp);
 
-                //****** 统一数据管理 ******(需要填充算法来处理上面的原始数据)
-                //P.gpsWeek = 0.0;
-                //P.gpsSeconds = 0.0;
-                JD = tt.calendarDateToJulianDate(P.year, P.month, P.day, P.hour, P.min, P.sec);
-                tt.JulianDateToGPS(JD, P.gpsWeek, P.gpsSeconds);
-                P.xMagnetic = 0.0;
-                P.yMagnetic = 0.0;
-                P.zMagnetic = 0.0;
-                P.tMagnetic = 0.0;
-                P.lat = P.B;
-                P.lon = P.L;
-                P.height = 0.0 - P.depth;
-                DadiPoint2ProjectPoint(P.lat, P.lon, P.X, P.Y);
-                //P.X = 0.0;
-                //P.Y = 0.0;
-                P.Z = 0.0;
-                P.cluster = P.docID;
-                linepoints.push_back(P);
-                lp.push_back(P);
+                    //****** 统一数据管理 ******(需要填充算法来处理上面的原始数据)
+                    //P.gpsWeek = 0.0;
+                    //P.gpsSeconds = 0.0;
+                    JD = tt.calendarDateToJulianDate(P.year, P.month, P.day, P.hour, P.min, P.sec);
+                    tt.JulianDateToGPS(JD, P.gpsWeek, P.gpsSeconds);
+                    P.xMagnetic = 0.0;
+                    P.yMagnetic = 0.0;
+                    P.zMagnetic = 0.0;
+                    P.tMagnetic = 0.0;
+                    P.lat = P.B;
+                    P.lon = P.L;
+                    P.height = 0.0 - P.depth;
+                    DadiPoint2ProjectPoint(P.lat, P.lon, P.X, P.Y);
+                    //P.X = 0.0;
+                    //P.Y = 0.0;
+                    P.Z = 0.0;
+                    P.cluster = P.docID;
+                    linepoints.push_back(P);
+                    lp.push_back(P);
+                }
+                catch (const std::exception &e)
+                {
+                    qDebug() << "跳过格式错误的行:" << QString::fromStdString(line)
+                              << "错误:" << e.what();
+                    continue;
+                }
             }
             fin.close();
             // QString str = "文件已处理数量：" +QString::number( i + 1) + "/" +QString::number( n) + ",剩余"+ QString::number( n - i - 1);

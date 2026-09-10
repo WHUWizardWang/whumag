@@ -80,16 +80,8 @@ public:
     MagneticComplexityAnalyzer();
     ~MagneticComplexityAnalyzer();
     // 主处理函数 - 返回复杂度分析结果
-    ComplexityResult analyzeComplexity(const Datapoint& data, double gridSize,int jumpSize=15,int stepSize=1);
     ComplexityResult analyzeComplexityChunked(const Datapoint& data, double gridSize, int jumpSize = 15,
                                               int chunkSize = 1000,bool air=false);
-    ComplexityResult airanalyzeComplexity(const Datapoint& data, double gridSize,int jumpSize=15,int stepSize=1);
-    double computeCheckLineAccuracy(const Geomagnetic::Datapoint & backgroundData,
-                                    const Geomagnetic::Datapoint & checkLineData,
-                                    double gridSize,
-                                    int jumpSize,
-                                    int stepSize);
-    std::vector<ComplexPoint> convertIndicesToGeo(const ComplexityResult &result);
     // 生成并显示复杂度热图
     void showComplexityMap(const ComplexityResult& result,int jumpSize);
     // 生成并显示测线间距热图
@@ -101,12 +93,7 @@ public:
 
 
     // 主成分分析和特征融合
-    std::vector<double> calculateComplexity(const std::vector<SubArea>& subAreas);
     void setSUBAREA_SIZE(int &subarea_size);
-
-    // 主处理函数
-    std::vector<double> processData(const Datapoint& data, double gridSize,GridData& gridData);
-    void plotComplexityMap(QCustomPlot* customPlot,const GridData& gridData,const std::vector<double>& complexityValues);
 
 private:
     int SUBAREA_SIZE; // 子区大小(个数）
@@ -119,13 +106,8 @@ private:
 
 
     // 计算子区的特征参数
-    SubArea calculateSubAreaFeatures(const std::vector<Geomagnetic::SinglePoint>& points);
     SubArea calculateSubAreaFeaturesFromGrid(const GridData& gridData,
                                              int centerRow, int centerCol);
-    std::vector<double> calculateComplexity(const std::vector<SubArea>& subAreas,
-                                            GridData& gridData,
-                                            const std::vector<int>& rowIndices,
-                                            const std::vector<int>& colIndices);
 
     //辅助函数
     double mapComplexityToSpacing(double complexity);

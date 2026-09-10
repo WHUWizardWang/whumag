@@ -65,6 +65,9 @@ Eigen::VectorXd CompressiveSensing::applySampling(const Eigen::VectorXd& data,
                                                   int sampling_factor)
 {
     int size = data.size();
+    if (sampling_factor <= 0) {
+        sampling_factor = 1;  // treat 0/negative as "no downsampling" instead of dividing by zero
+    }
     int sampled_size = size / sampling_factor;
 
     std::random_device rd;
@@ -122,7 +125,7 @@ Eigen::VectorXd CompressiveSensing::sparseReconstruction(const Eigen::VectorXd& 
 
         // 部分排序找到最大的 2s 个元素
         std::partial_sort(correlation_pairs.begin(),
-                          correlation_pairs.begin() + support_size,
+                          correlation_pairs.begin() + std::min(support_size, N),
                           correlation_pairs.end(),
                           std::greater<std::pair<double, int>>());
 
@@ -158,7 +161,7 @@ Eigen::VectorXd CompressiveSensing::sparseReconstruction(const Eigen::VectorXd& 
         }
 
         std::partial_sort(coef_pairs.begin(),
-                          coef_pairs.begin() + n_nonzero_coefs,
+                          coef_pairs.begin() + std::min<size_t>(n_nonzero_coefs, coef_pairs.size()),
                           coef_pairs.end(),
                           std::greater<std::pair<double, int>>());
 

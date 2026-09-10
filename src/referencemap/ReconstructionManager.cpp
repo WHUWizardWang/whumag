@@ -15,7 +15,9 @@ bool ReconstructionManager::processData(const QString& input_file,
     Geomagnetic::Datapoint data;
     // 实现数据加载逻辑...
     Geomagnetic::ReadData readData;
-    readData.readGridFromFile(input_file.toStdString(), data);
+    if (!readData.readGridFromFile(input_file.toStdString(), data)) {
+        return false;
+    }
     // 执行重构
     auto result = cs.reconstruct(data, n_nonzero_coefs, sampling_factor);
 
@@ -30,18 +32,14 @@ bool ReconstructionManager::saveResults(const CompressiveSensing::Reconstruction
     QDir().mkpath(output_dir);
 
     QString result_path = output_dir + "/" + output_filename;
-    QString temp_path = output_dir + "/temp.tmp";
 
     QFile result_file(result_path);
-    QFile temp_file(temp_path);
 
-    if (!result_file.open(QIODevice::WriteOnly | QIODevice::Text) ||
-        !temp_file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    if (!result_file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         return false;
     }
 
     QTextStream result_stream(&result_file);
-    QTextStream temp_stream(&temp_file);
 
     for (size_t i = 0; i < result.x.size(); ++i) {
         QString line = QString("%1 %2 %3\n")
@@ -50,7 +48,6 @@ bool ReconstructionManager::saveResults(const CompressiveSensing::Reconstruction
             .arg(result.reconstructed_signal[i]);
 
         result_stream << line;
-        temp_stream << line;
     }
     RMS = result.rms_error;
     qDebug() << "RMS Error:" << result.rms_error;

@@ -74,21 +74,15 @@ const double a = 6378137.0;
     };
     class ReadData
     {
-    public:  
-        // Read the data from file and fill the map
-        bool readDataFromFile(const std::string& filename, Datapoint& datapoints);
+    public:
         bool readGridFromFile(const std::string& filename, Datapoint& datapoints);
         void DataSet(Datapoint& datapoiint, Datainfo& datainfo);
         void selectRandomData(const Datapoint& allData, Datapoint& data_sparse, int n=10);
-        void getDatarowcol(std::vector<double>X, std::vector<double>Y, std::vector<double>T, int& row, int& col,double step_x,double step_y);
         void selectLineData(const Datapoint& allData, Datapoint& train, Datapoint& test,int n);
-        void selectLineData1(const Datapoint& allData, Datapoint& train, Datapoint& test,Datapoint& all);
         void selectLineData(const Datapoint& allData, Datapoint& train, int n);
-        void selectLineData_sub(const Datapoint& allData, Datapoint& train, int n);
         void resultOut(const Datapoint& dataresult, const std::string& filename);
         void DadiPoint2ProjectPoint(double B, double L,double &x,double &y);
         int ReadLines(QStringList FileList,QString savepath);
-        int ReadLines_xyt(QStringList FileList,QString savepath);
         bool createGridData(const Datapoint& datapoints, Datapoint& dataresult, double dx, double dy);
         Datapoint setDataResult(Datapoint& datapoint, double interval);
     public:

@@ -51,101 +51,6 @@ bool ContourPlotter::loadData(const QString& filepath)
     return true;
 }
 
-double ContourPlotter::bilinearInterpolate(double x, double y,
-                                           const std::vector<double>& gridX,
-                                           const std::vector<double>& gridY,
-                                           const std::vector<std::vector<double>>& gridZ)
-{
-    // 检查输入数据的有效性
-    if (gridX.empty() || gridY.empty() || gridZ.empty() || gridZ[0].empty()) {
-        return 0.0;
-    }
-
-    // 修正的边界处理
-    if (x <= gridX.front()) {
-        if (y <= gridY.front()) return gridZ[0][0];
-        if (y >= gridY.back()) return gridZ[gridY.size()-1][0];
-    }
-    if (x >= gridX.back()) {
-        if (y <= gridY.front()) return gridZ[0][gridX.size()-1];
-        if (y >= gridY.back()) return gridZ[gridY.size()-1][gridX.size()-1];
-    }
-
-    // 使用二分查找确定x所在的区间
-    int i = 0;
-    int lower = 0;
-    int upper = gridX.size() - 1;
-
-    while (lower <= upper) {
-        int mid = (lower + upper) / 2;
-        if (x < gridX[mid]) {
-            upper = mid - 1;
-        } else if (x > gridX[mid] && mid < gridX.size() - 1 && x >= gridX[mid + 1]) {
-            lower = mid + 1;
-        } else {
-            i = mid;
-            break;
-        }
-    }
-
-    // 使用二分查找确定y所在的区间
-    int j = 0;
-    lower = 0;
-    upper = gridY.size() - 1;
-
-    while (lower <= upper) {
-        int mid = (lower + upper) / 2;
-        if (y < gridY[mid]) {
-            upper = mid - 1;
-        } else if (y > gridY[mid] && mid < gridY.size() - 1 && y >= gridY[mid + 1]) {
-            lower = mid + 1;
-        } else {
-            j = mid;
-            break;
-        }
-    }
-
-    // 确保索引不会越界
-    i = std::min(i, static_cast<int>(gridX.size() - 2));
-    j = std::min(j, static_cast<int>(gridY.size() - 2));
-    i = std::max(i, 0);
-    j = std::max(j, 0);
-
-    // 获取周围四个点的值
-    double x1 = gridX[i];
-    double x2 = gridX[i + 1];
-    double y1 = gridY[j];
-    double y2 = gridY[j + 1];
-
-    // 安全地访问网格数据
-    if (j >= 0 && j + 1 < gridZ.size() && i >= 0 && i + 1 < gridZ[0].size()) {
-        double q11 = gridZ[j][i];
-        double q12 = gridZ[j + 1][i];
-        double q21 = gridZ[j][i + 1];
-        double q22 = gridZ[j + 1][i + 1];
-
-        // 防止除零错误
-        double dx = x2 - x1;
-        double dy = y2 - y1;
-        if (std::abs(dx) < 1e-10 || std::abs(dy) < 1e-10) {
-            return q11; // 如果网格极小，直接返回最近点的值
-        }
-
-        // 计算插值权重
-        double fx = (x - x1) / dx;
-        double fy = (y - y1) / dy;
-
-        // 执行双线性插值
-        return q11 * (1 - fx) * (1 - fy) +
-               q21 * fx * (1 - fy) +
-               q12 * (1 - fx) * fy +
-               q22 * fx * fy;
-    }
-
-    // 如果出现任何问题，返回默认值
-    return 0.0;
-}
-
 void ContourPlotter::plotContour()
 {
     // 检查数据有效性
@@ -373,6 +278,9 @@ void ContourPlotter::autoplotContour()
         // 自动设置合理的步长
         dx = (xmax - xmin) / 100.0;
         dy = (ymax - ymin) / 100.0;
+        // 防止 X 或 Y 范围退化为 0 时,步长仍为 0,导致后续除零产生 NaN
+        if (std::abs(dx) < 1e-10) dx = 1.0;
+        if (std::abs(dy) < 1e-10) dy = 1.0;
         qDebug() << "步长自动设置为: dx=" << dx << ", dy=" << dy;
     }
 
@@ -382,16 +290,6 @@ void ContourPlotter::autoplotContour()
 
     // 计算网格大小 - 基于实际数据分布
     int nx, ny;
-    // if (isRegularGrid) {
-    //     // 如果是规则网格，使用数据中暗示的网格尺寸
-    //     nx = static_cast<int>((xmax - xmin) / dx) + 1;
-    //     ny = static_cast<int>((ymax - ymin) / dy) + 1;
-    // } else {
-    //     // 不规则数据，使用合适的网格尺寸
-    //     const int MAX_GRID_SIZE = 500;
-    //     nx = qMin(MAX_GRID_SIZE, static_cast<int>((xmax - xmin) / dx) + 1);
-    //     ny = qMin(MAX_GRID_SIZE, static_cast<int>((ymax - ymin) / dy) + 1);
-    // }
     const int MAX_GRID_SIZE = 500;
     nx = qMin(MAX_GRID_SIZE, static_cast<int>((xmax - xmin) / dx) + 1);
     ny = qMin(MAX_GRID_SIZE, static_cast<int>((ymax - ymin) / dy) + 1);
@@ -758,11 +656,6 @@ void ContourPlotter::interpolateEdge(
 }
 
 
-void ContourPlotter::savePlot(const QString& pngpath)
-{
-    customPlot->savePng(pngpath + "/con.png", 0, 0, 1.0, -1);
-}
-
 double ContourPlotter::estimateStep(const std::vector<double>& v)
 {
     const double EPS = 1e-9;
@@ -805,6 +698,9 @@ void ContourPlotter::autoDetectStep()
         double ymax = *std::max_element(Y.begin(), Y.end());
         sx = (xmax - xmin) / 100.0;
         sy = (ymax - ymin) / 100.0;
+        // 防止 X 或 Y 范围退化为 0 时,步长仍为 0,导致后续除零产生 NaN
+        if (sx < 1e-6) sx = 1.0;
+        if (sy < 1e-6) sy = 1.0;
     }
     setStep(sx, sy);
 }

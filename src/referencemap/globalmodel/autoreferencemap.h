@@ -50,12 +50,8 @@ private:
     bool loadResourceFile();      // 加载资源文件
 
     int heightIndex = -1;       // 选择高度的索引
-    QString saveFilePath;       // 保存路径
     Accuracy accuracy;          // 精度评估类
 
-
-    double calculateRMS(const Geomagnetic::Datapoint &datapoints,
-                        const Geomagnetic::Datapoint &dataresults);
 signals:
     void treeUpdated(int flag); // 定义信号
 };

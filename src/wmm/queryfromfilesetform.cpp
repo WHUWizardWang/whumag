@@ -1,6 +1,7 @@
 #include "queryfromfilesetform.h"
 #include "ui_queryfromfilesetform.h"
 #include "OmgValidator.h"
+using wmm::OmgValidator;
 
 QueryFromFileSetForm::QueryFromFileSetForm(QWidget *parent) :
     QWidget(parent),
@@ -54,6 +55,10 @@ int QueryFromFileSetForm::toCoordGeodeticArray(MAGtype_CoordGeodetic *CoordGeode
     QTextStream stream(&file);
     while (stream.atEnd() == false)
     {
+        if (idx >= length)
+        {
+            break;
+        }
         QString line = stream.readLine();
         bool valid = parse(line, &coord_tmp, &userdate_tmp);
 

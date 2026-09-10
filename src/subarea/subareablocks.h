@@ -40,10 +40,8 @@ public:
     void out2file(QString filepath);                                        // 输出到文件
     void subarea(Datapoint &all,Datainfo datainfo,Datapoint &datapoint);  // 分区
     void build(Datapoint &all,Datainfo datainfo,Datapoint &datapoint,QString filepath);  // 建模
-    void subareaAll(Datapoint &all,Datainfo datainfo,Datapoint &datapoint,double &x_step0,double &y_step0,QString filepath);  // 汇总
 
 
-    int type;               // 测线分布方向,0/1
     double x_step;          // 输入数据的x间隔
     double y_step;          // 输入数据的y间隔
     int row_in;             // 输入数据行数

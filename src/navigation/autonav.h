@@ -43,7 +43,6 @@ public:
 private:
     // —— 三种算法的实例 ——
     ICCP            cp;  ///< ICCP 算法实例
-    TercomMatching  tm;  ///< TERCOM 算法实例
     SitanMatching   sm;  ///< SITAN 算法实例
 
     // —— 原始数据载体 ——

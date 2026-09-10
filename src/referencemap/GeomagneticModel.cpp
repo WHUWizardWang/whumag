@@ -285,6 +285,7 @@ namespace Geomagnetic
                     A(i, j) = 1/sqrt((elem.second.X - entry.second.X) * (elem.second.X - entry.second.X) + (elem.second.Y - entry.second.Y) * (elem.second.Y - entry.second.Y) + Sigma2);
                     ++j;
                 }
+                ++i;
             }
         }
         else std::cerr << "Unknown Kernel function" << endl;
@@ -907,94 +908,7 @@ namespace Geomagnetic
         const std::vector<double>& xi,
         const std::vector<double>& yi
         ) {
-        // 检查输入有效性
-        if (x.empty() || y.empty() || z.empty() || xi.empty() || yi.empty()) {
-            std::cerr << "错误: 输入向量为空" << std::endl;
-            return std::vector<double>(xi.size(), 0.0);
-        }
-
-        if (x.size() != y.size() || x.size() != z.size()) {
-            std::cerr << "错误: 输入数据点向量大小不匹配" << std::endl;
-            return std::vector<double>(xi.size(), 0.0);
-        }
-
-        if (xi.size() != yi.size()) {
-            std::cerr << "错误: 查询点向量大小不匹配" << std::endl;
-            return std::vector<double>(xi.size(), 0.0);
-        }
-
-        auto start = std::chrono::high_resolution_clock::now();
-
-        // 根据数据规模决定最佳处理策略
-        int n = x.size();
-        int m = xi.size();
-
-        std::cout << "开始插值: " << n << " 个数据点, " << m << " 个查询点" << std::endl;
-
-        std::vector<double> results;
-
-        try {
-            // 估算内存需求并选择适当的处理方法
-            size_t estMemoryMB = (n * n * sizeof(double)) / (1024 * 1024);
-            std::cout << "估计矩阵内存需求: " << estMemoryMB << " MB" << std::endl;
-
-            if (n < 10000) {
-                // 对于小数据集，直接使用标准RBF方法
-                std::cout << "使用标准RBF方法(数据集小)" << std::endl;
-
-                // 这里可以添加标准RBF方法的实现
-                // 暂时调用块处理方法，设置块大小为数据集大小
-                results = blockInterpolate(x, y, z, xi, yi, n);
-            }
-            else if (n < 20000) {
-                // 中等数据集使用块处理，但较大块
-                std::cout << "使用中等大小的块处理方法" << std::endl;
-                results = blockInterpolate(x, y, z, xi, yi, 5000);
-            }
-            else {
-                // 大数据集使用小块处理
-                std::cout << "使用小块处理方法(大数据集)" << std::endl;
-                results = blockInterpolate(x, y, z, xi, yi, 2000);
-            }
-        }
-        catch (const std::bad_alloc& e) {
-            std::cerr << "内存分配失败: " << e.what() << std::endl;
-            std::cerr << "尝试使用更小的块..." << std::endl;
-
-            try {
-                // 回退到更小的块大小
-                results = blockInterpolate(x, y, z, xi, yi, 500);
-            }
-            catch (const std::exception& e) {
-                std::cerr << "插值失败: " << e.what() << std::endl;
-
-                // 最终回退到最近邻插值
-                std::cout << "回退到最近邻插值方法" << std::endl;
-                results.resize(xi.size());
-
-#pragma omp parallel for
-                for (size_t i = 0; i < xi.size(); ++i) {
-                    double min_dist = std::numeric_limits<double>::max();
-                    size_t nearest_idx = 0;
-
-                    for (size_t j = 0; j < x.size(); ++j) {
-                        double dist = std::pow(x[j] - xi[i], 2) + std::pow(y[j] - yi[i], 2);
-                        if (dist < min_dist) {
-                            min_dist = dist;
-                            nearest_idx = j;
-                        }
-                    }
-
-                    results[i] = z[nearest_idx];
-                }
-            }
-        }
-
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = end - start;
-        std::cout << "插值完成，耗时: " << elapsed.count() << " 秒" << std::endl;
-
-        return results;
+        return interpolateImpl(x, y, z, xi, yi, 10000, 20000, 5000, 2000, 500, /*verbose=*/true);
     }
 
     std::vector<double> OptimizedCubicInterpolator::cubic_interpolate(
@@ -1005,6 +919,19 @@ namespace Geomagnetic
         const std::vector<double>& yi
         )
     {
+        return interpolateImpl(x, y, z, xi, yi, 100, 1000, 500, 200, 50, /*verbose=*/false);
+    }
+
+    std::vector<double> OptimizedCubicInterpolator::interpolateImpl(
+        const std::vector<double>& x,
+        const std::vector<double>& y,
+        const std::vector<double>& z,
+        const std::vector<double>& xi,
+        const std::vector<double>& yi,
+        int smallThreshold, int mediumThreshold,
+        int mediumBlock, int largeBlock, int fallbackBlock,
+        bool verbose)
+    {
         // 检查输入有效性
         if (x.empty() || y.empty() || z.empty() || xi.empty() || yi.empty()) {
             std::cerr << "错误: 输入向量为空" << std::endl;
@@ -1027,32 +954,42 @@ namespace Geomagnetic
         int n = x.size();
         int m = xi.size();
 
-        //        std::cout << "开始插值: " << n << " 个数据点, " << m << " 个查询点" << std::endl;
+        if (verbose) {
+            std::cout << "开始插值: " << n << " 个数据点, " << m << " 个查询点" << std::endl;
+        }
 
         std::vector<double> results;
 
         try {
             // 估算内存需求并选择适当的处理方法
             size_t estMemoryMB = (n * n * sizeof(double)) / (1024 * 1024);
-            //            std::cout << "估计矩阵内存需求: " << estMemoryMB << " MB" << std::endl;
+            if (verbose) {
+                std::cout << "估计矩阵内存需求: " << estMemoryMB << " MB" << std::endl;
+            }
 
-            if (n < 100) {
+            if (n < smallThreshold) {
                 // 对于小数据集，直接使用标准RBF方法
-                //                std::cout << "使用标准RBF方法(数据集小)" << std::endl;
+                if (verbose) {
+                    std::cout << "使用标准RBF方法(数据集小)" << std::endl;
+                }
 
                 // 这里可以添加标准RBF方法的实现
                 // 暂时调用块处理方法，设置块大小为数据集大小
                 results = blockInterpolate(x, y, z, xi, yi, n);
             }
-            else if (n < 1000) {
+            else if (n < mediumThreshold) {
                 // 中等数据集使用块处理，但较大块
-                //                std::cout << "使用中等大小的块处理方法" << std::endl;
-                results = blockInterpolate(x, y, z, xi, yi, 500);
+                if (verbose) {
+                    std::cout << "使用中等大小的块处理方法" << std::endl;
+                }
+                results = blockInterpolate(x, y, z, xi, yi, mediumBlock);
             }
             else {
                 // 大数据集使用小块处理
-                //                std::cout << "使用小块处理方法(大数据集)" << std::endl;
-                results = blockInterpolate(x, y, z, xi, yi, 200);
+                if (verbose) {
+                    std::cout << "使用小块处理方法(大数据集)" << std::endl;
+                }
+                results = blockInterpolate(x, y, z, xi, yi, largeBlock);
             }
         }
         catch (const std::bad_alloc& e) {
@@ -1061,13 +998,15 @@ namespace Geomagnetic
 
             try {
                 // 回退到更小的块大小
-                results = blockInterpolate(x, y, z, xi, yi, 50);
+                results = blockInterpolate(x, y, z, xi, yi, fallbackBlock);
             }
             catch (const std::exception& e) {
                 std::cerr << "插值失败: " << e.what() << std::endl;
 
                 // 最终回退到最近邻插值
-                //                std::cout << "回退到最近邻插值方法" << std::endl;
+                if (verbose) {
+                    std::cout << "回退到最近邻插值方法" << std::endl;
+                }
                 results.resize(xi.size());
 
 #pragma omp parallel for
@@ -1090,56 +1029,11 @@ namespace Geomagnetic
 
         auto end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = end - start;
-        //        std::cout << "插值完成，耗时: " << elapsed.count() << " 秒" << std::endl;
+        if (verbose) {
+            std::cout << "插值完成，耗时: " << elapsed.count() << " 秒" << std::endl;
+        }
 
         return results;
-    }
-
-    std::vector<double> OptimizedCubicInterpolator::idw_interpolate(
-        const std::vector<double>& x,
-        const std::vector<double>& y,
-        const std::vector<double>& z,
-        const std::vector<double>& xi,
-        const std::vector<double>& yi
-        )
-    {
-        const double p = 2.0;  // IDW幂次，一般取2
-        const double eps = 1e-12; // 防止除0
-        size_t n = x.size();
-        size_t m = xi.size();
-
-        std::vector<double> result(m, 0.0);
-
-        for (size_t k = 0; k < m; ++k) {
-            double sx = xi[k], sy = yi[k];
-            double numerator = 0.0;
-            double denominator = 0.0;
-            bool found_exact = false;
-            double exact_value = 0.0;
-
-            for (size_t j = 0; j < n; ++j) {
-                double dx = x[j] - sx;
-                double dy = y[j] - sy;
-                double dist2 = dx * dx + dy * dy;
-                if (dist2 < eps) {
-                    // 完全重合，直接赋值
-                    found_exact = true;
-                    exact_value = z[j];
-                    break;
-                }
-                double w = 1.0 / std::pow(dist2, p * 0.5);
-                numerator += w * z[j];
-                denominator += w;
-            }
-            if (found_exact) {
-                result[k] = exact_value;
-            } else if (denominator > 0) {
-                result[k] = numerator / denominator;
-            } else {
-                result[k] = 0.0; // 无法插值
-            }
-        }
-        return result;
     }
 
     double OptimizedCubicInterpolator::cubicInterpolate(double p0, double p1, double p2, double p3, double t) {

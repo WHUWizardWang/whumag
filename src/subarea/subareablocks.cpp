@@ -13,6 +13,13 @@ void subareaBlocks::cal_rc(Datapoint &datapoint)
         xx.push_back(elem.second.X);
         yy.push_back(elem.second.Y);
     }
+    if (xx.isEmpty())
+    {
+        qWarning() << "subareaBlocks::cal_rc: datapoint is empty, aborting row/col calculation";
+        col_in = 0;
+        row_in = 0;
+        return;
+    }
     double minX = *std::min_element(xx.begin(), xx.end());
     double maxX = *std::max_element(xx.begin(), xx.end());
     double minY = *std::min_element(yy.begin(), yy.end());
@@ -39,7 +46,7 @@ void subareaBlocks::dp2anop(Datapoint &datapoint)
         for (int j = 0; j < col_in; ++j)
         {
             int index = i * col_in + j;
-            dataInput[i][j] = temp[index];
+            dataInput[i][j] = (index < temp.size()) ? temp[index] : AnoPoint{0.0, 0.0, 0.0};
         }
     }
 }
@@ -80,23 +87,23 @@ void subareaBlocks::createBounds()
     for (int i = 0;i<row_blockCount-1;i++)
     {
         std::pair<int,int> temp;
-        temp.first = i*(groupSize_row - row_overlap);
-        temp.second = i*(groupSize_row - row_overlap)+groupSize_row -1;
+        temp.first  = qBound(0, i*(groupSize_row - row_overlap), row_in - 1);
+        temp.second = qBound(0, i*(groupSize_row - row_overlap) + groupSize_row - 1, row_in - 1);
         i_index.push_back(temp);
     }
     std::pair<int,int> temp0;
-    temp0.first = (row_blockCount-1)*(groupSize_row - row_overlap);
+    temp0.first  = qBound(0, (row_blockCount-1)*(groupSize_row - row_overlap), row_in - 1);
     temp0.second = row_in-1;
     i_index.push_back(temp0);
     for (int j = 0;j<col_blockCount-1;j++)
     {
         std::pair<int,int> temp;
-        temp.first = j*(groupSize_col - col_overlap);
-        temp.second = j*(groupSize_col - col_overlap)+groupSize_col -1;
+        temp.first  = qBound(0, j*(groupSize_col - col_overlap), col_in - 1);
+        temp.second = qBound(0, j*(groupSize_col - col_overlap) + groupSize_col - 1, col_in - 1);
         j_index.push_back(temp);
     }
     std::pair<int,int> temp1;
-    temp1.first = (col_blockCount-1)*(groupSize_col - col_overlap);
+    temp1.first  = qBound(0, (col_blockCount-1)*(groupSize_col - col_overlap), col_in - 1);
     temp1.second = col_in-1;
     j_index.push_back(temp1);
     //
@@ -182,39 +189,6 @@ void subareaBlocks::create_dp_result()
     {
         datapoint_result[i].resize(col_blockCount);
     }
-    // // 创建每一分块的结果模板
-    // QVector<QVector<ijBound>> ij_block;
-    // ij_block.resize(row_blockCount);
-    // for (int i = 0; i < row_blockCount; ++i)
-    // {
-    //     ij_block[i].resize(col_blockCount);
-    // }
-    //
-    // for (int i = 0;i<row_blockCount;i++)
-    // {
-    //     for (int j = 0;j<col_blockCount;j++)
-    //     {
-    //         int flag = 1;
-    //         double i_start = dataInput[ijBounds[i][j].i_min][ijBounds[i][j].j_min].x;
-    //         double j_start = dataInput[ijBounds[i][j].i_min][ijBounds[i][j].j_min].y;
-    //         double i_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].x;
-    //         double j_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].y;
-    //         int col_jj = round((j_end-j_start)/0.5 +1); // 该区行列数
-    //         int row_ii = round((i_end-i_start)/0.5 +1);
-    //         for (int ii = 0;ii<row_ii;ii++)
-    //         {
-    //             for (int jj = 0;jj<col_jj;jj++)
-    //             {
-    //                 SinglePoint point;
-    //                 point.X = i_start + 0.5*ii;
-    //                 point.Y = j_start + 0.5*jj;
-    //                 point.tMagnetic = 0.0;
-    //                 datapoint_result[i][j].insert(std::make_pair(flag, point));
-    //                 flag++;
-    //             }
-    //         }
-    //     }
-    // }
     for (int i = 0; i < row_blockCount; i++)
     {
         for (int j = 0; j < col_blockCount; j++)
@@ -275,29 +249,6 @@ void subareaBlocks::subModel(Datainfo datainfo)
             poly.ComputeQ(datainfo, tmp_dp);
             poly.ComputeX(datainfo, tmp_dp);
             poly.Result(datainfo, datapoint_result[i][j],tmp_dp);
-
-            // TaylorModel
-            //            Geomagnetic::TaylorModel taylor;
-            //            Geomagnetic::Datapoint tmp_dp = anop2dp(ijBounds[i][j]);
-            //            datainfo.Cutoff = 5;
-            //            ReadData readdata;
-            //            readdata.DataSet(tmp_dp, datainfo);
-            //            taylor.init(datainfo);
-            //            taylor.CalculateM(tmp_dp);
-            //            taylor.CalculateAQ(tmp_dp);
-            //            taylor.Result(datapoint_result[i][j]);
-            // subarea output to txt
-            //            QFile file("/home/OMG1/build-test1-unknown-Debug/x/"+QString::number(i)+"_"+QString::number(j)+".txt");
-            //            if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-            //            {
-            //                qDebug() << "无法打开文件进行写入：" << file.errorString();
-            //            }
-            //            QTextStream out(&file);
-            //            for (auto &elem : datapoint_result[i][j])
-            //            {
-            //                out<<elem.second.X<<" "<<elem.second.Y<<" "<<elem.second.tMagnetic<<endl;
-            //            }
-            //            file.close();
         }
     }
 }
@@ -318,6 +269,11 @@ void subareaBlocks::submerge(Datapoint &all)
     {
         xx.push_back(elem.second.X);
         yy.push_back(elem.second.Y);
+    }
+    if (xx.isEmpty())
+    {
+        qWarning() << "subareaBlocks::submerge: 'all' is empty, aborting submerge";
+        return;
     }
     double min_i = *std::min_element(xx.begin(), xx.end());
     double max_i = *std::max_element(xx.begin(), xx.end());
@@ -356,7 +312,11 @@ double subareaBlocks::distanceBetween(SinglePoint p1,AnoPoint p2)
 
 SinglePoint subareaBlocks::findNearestPoint(Datapoint input, AnoPoint p)
 {
-    SinglePoint nearestPoint = input.at(1); // 假设第一个点是最接近的，以便开始
+    if (input.empty())
+    {
+        return SinglePoint(); // 空结果集时返回默认点，避免 .at() 抛出异常导致程序崩溃
+    }
+    SinglePoint nearestPoint = input.begin()->second; // 假设第一个点是最接近的，以便开始
     double minDistance = distanceBetween(nearestPoint,p);
     for (const auto point : input)
     {
@@ -377,6 +337,11 @@ void subareaBlocks::createSubAll(Datapoint &all)
     {
         xx.push_back(elem.second.X);
         yy.push_back(elem.second.Y);
+    }
+    if (xx.isEmpty())
+    {
+        qWarning() << "subareaBlocks::createSubAll: 'all' is empty, aborting createSubAll";
+        return;
     }
     double minX = *std::min_element(xx.begin(), xx.end());
     double maxX = *std::max_element(xx.begin(), xx.end());
@@ -402,7 +367,7 @@ void subareaBlocks::createSubAll(Datapoint &all)
         for (int j = 0; j < all_col_in; ++j)
         {
             int index = i * all_col_in + j;
-            dataInput_all[i][j] = temp[index];
+            dataInput_all[i][j] = (index < temp.size()) ? temp[index] : AnoPoint{0.0, 0.0, 0.0};
         }
     }
     //
@@ -422,8 +387,8 @@ void subareaBlocks::createSubAll(Datapoint &all)
             double j_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].y;
             int col_jj = round((j_end-j_start)/0.5 +1); // 该区行列数
             int row_ii = round((i_end-i_start)/0.5 +1);
-            int ii_start = round((i_start-minY)/0.5);
-            int jj_start = round((j_start-minX)/0.5);
+            int ii_start = round((i_start-minX)/0.5);
+            int jj_start = round((j_start-minY)/0.5);
             int ii_end = ii_start+row_ii;
             int jj_end = jj_start+col_jj;
             for (int ii = ii_start;ii<ii_end;ii++)
@@ -461,10 +426,10 @@ void subareaBlocks::subAccuracy(Datapoint &all)
                 SumSquares = SumSquares + (p.tMagnetic - elem.z) * (p.tMagnetic - elem.z);
                 CountsubSumSquares++;
             }
-            subrms[i][j] = qSqrt(subSumSquares/CountsubSumSquares);
+            subrms[i][j] = (CountsubSumSquares > 0) ? qSqrt(subSumSquares/CountsubSumSquares) : 0.0;
         }
     }
-    rms = qSqrt(SumSquares/CountSumSquares);
+    rms = (CountSumSquares > 0) ? qSqrt(SumSquares/CountSumSquares) : 0.0;
 }
 
 void subareaBlocks::out2file(QString filepath)
@@ -473,6 +438,8 @@ void subareaBlocks::out2file(QString filepath)
     if(!file.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         qDebug()<<"failed: "<<file.errorString();
+        outstr = "保存文件失败: " + file.errorString();   // surface to user via existing outstr mechanism used elsewhere in this class
+        return;
     }
     QTextStream out(&file);
     for (auto elem:result)
@@ -546,39 +513,6 @@ int subareaBlocks::inputPara_subarea(QDialog &dialog,int &data_num, QStringList 
     }
     else
         return -1;
-}
-
-void subareaBlocks::subareaAll(Datapoint &all,Datainfo datainfo,Datapoint &datapoint,
-                               double &x_step0,double &y_step0,QString filepath)
-{
-    x_step = x_step0;
-    y_step = y_step0;
-    extractEveryNthRow = round(y_step/0.5); // 没用的参数
-    cal_rc(datapoint);
-    dp2anop(datapoint);
-    row_overlap = 2;        // 行重叠度
-    col_overlap = 2;        // 列重叠度
-    row_blockCount = 3;     // 分成几行
-    col_blockCount = 3;     // 分成几列
-    createBounds();
-
-    subStd();
-    create_dp_result();
-    subModel(datainfo);
-    submerge(all);
-    createSubAll(all);
-    subAccuracy(all);
-    out2file(filepath);
-    outstr = "各区RMS: \n";
-    for (int i = 0;i<row_blockCount;i++)
-    {
-        for (int j = 0;j<col_blockCount;j++)
-        {
-            outstr = outstr+ "第" +QString::number(i+1) + "行 - 第"
-                     + QString::number(j+1)+"列 : "+QString::number(subrms[i][j], 'f', 3) + "\n";
-        }
-    }
-    outstr = outstr+"总RMS: "+QString::number(rms, 'f', 3);
 }
 
 void subareaBlocks::subarea(Datapoint &all,Datainfo datainfo,Datapoint &datapoint)

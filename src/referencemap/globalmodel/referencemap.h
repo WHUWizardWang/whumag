@@ -54,12 +54,8 @@ private:
 
 
     int modelIndex = -1;        // 选择建模方法的索引
-    QString saveFilePath;       // 保存路径
 
 
-
-    double calculateRMS(const Geomagnetic::Datapoint &datapoints,
-                        const Geomagnetic::Datapoint &dataresults);
 signals:
     void treeUpdated(int flag); // 定义信号
 };

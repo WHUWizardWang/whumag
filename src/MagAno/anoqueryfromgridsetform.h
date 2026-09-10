@@ -26,8 +26,7 @@ private:
     Ui::AnoQueryFromGridSetForm *ui;
     double lat_min, lat_max, lat_step;
     double lon_min, lon_max, lon_step;
-    int lat_num, lon_num, height_num, date_num, total_num;
-    int useGeoid;
+    int lat_num, lon_num, total_num;
 };
 
 #endif // ANOQUERYFROMGRIDSETFORM_H

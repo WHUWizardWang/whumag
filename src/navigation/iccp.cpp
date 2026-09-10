@@ -40,19 +40,6 @@ void ICCP::setDxDy(double x_step, double y_step)
     ySize = qMax(1, int((ymax - ymin) / dy) + 1);
 }
 
-QVector<QPointF> ICCP::eigenMatrixToQVector(const Eigen::MatrixXd& matrix)
-{
-    QVector<QPointF> points;
-    points.reserve(matrix.cols()); // 预分配内存以提高效率
-
-    for (int i = 0; i < matrix.cols(); ++i)
-    {
-        QPointF point(matrix(0,i), matrix(1,i));
-        points.push_back(point);
-    }
-    return points;
-}
-
 QVector<QVector<double>> ICCP::ReadFile(const QString &fileName)
 {
     xmin = 0.0;
@@ -333,38 +320,6 @@ void ICCP::getLines(CountLine &result,
     result.value = isoValue;
 }
 
-void ICCP::draw_lines(CountLine lines,double m,double n)
-{
-    int fileint = 0;
-    QCustomPlot *customPlot = new QCustomPlot();
-//    customPlot->yAxis->setRangeReversed(true);
-    customPlot->xAxis->setRange(0,n);
-    customPlot->yAxis->setRange(0,m);
-    for (const QLineF &l : lines.line)
-    {
-        QCPGraph *graph = customPlot->addGraph();
-        QVector<double> keys, values;
-        keys.push_back(l.x1());
-        values.push_back(l.y1());
-        keys.push_back(l.x2());
-        values.push_back(l.y2());
-        graph->addData(keys,values);
-    }
-    customPlot->replot();
-    // 创建并显示弹出窗口
-//    QMainWindow *plotWindow = new QMainWindow();
-//    QWidget *centralWidget = new QWidget();
-//    QVBoxLayout *layout = new QVBoxLayout(centralWidget);
-//    layout->addWidget(customPlot);
-//    plotWindow->setCentralWidget(centralWidget);
-//    plotWindow->resize(800,600);
-//    plotWindow->setWindowTitle("show");
-//    plotWindow->show();
-    QString str = "temp_" + QString::number(fileint) +"_"+QString::number(lines.value)+ ".jpg";
-    customPlot->saveJpg(str,customPlot->width(),customPlot->height());
-    fileint++;
-}
-
 QPointF ICCP::findNearestPointOnLine(const QLineF line, const QPointF p)
 {
     QPointF nearestPoint;
@@ -432,156 +387,6 @@ QPointF ICCP::computeCentroid(const QVector<QPointF>& points)
     }
     centroid /= points.size();
     return centroid;
-}
-
-void ICCP::computeRotationMatrix(const QVector<QPointF>& points1, const QVector<QPointF>& points2,Eigen::Matrix2d &R,Eigen::MatrixXd &T)
-{
-    // 1. 计算质心
-    Eigen::Vector2d centroid1 = Eigen::Vector2d::Zero(), centroid2 = Eigen::Vector2d::Zero();
-    for (const QPointF &p : points1) centroid1 += Eigen::Vector2d(p.x(), p.y());
-    for (const QPointF &p : points2) centroid2 += Eigen::Vector2d(p.x(), p.y());
-    centroid1 /= points1.size();
-    centroid2 /= points2.size();
-
-    // 2. 对齐质心
-    QVector<Eigen::Vector2d> alignedPoints1, alignedPoints2;
-    for (const QPointF &p : points1) alignedPoints1.push_back(Eigen::Vector2d(p.x() - centroid1.x(), p.y() - centroid1.y()));
-    for (const QPointF &p : points2) alignedPoints2.push_back(Eigen::Vector2d(p.x() - centroid2.x(), p.y() - centroid2.y()));
-
-
-    // 3. 使用最小二乘法求解旋转角度（这里简化处理，使用Eigen的SVD）
-    Eigen::MatrixXd H(2, 2);
-    H.setZero();
-    for (int i = 0; i < alignedPoints1.size(); ++i) {
-        H += alignedPoints1[i] * alignedPoints2[i].transpose();
-    }
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(H, Eigen::ComputeThinU | Eigen::ComputeThinV);
-    Eigen::Matrix2d U = svd.matrixU();
-    Eigen::Matrix2d V = svd.matrixV();
-    R = V * U.transpose();
-    double angle = atan2(R(1, 0), R(0, 0)); // 弧度制
-    double degrees = angle * 180.0 / M_PI; // 转换为角度制
-//    qDebug()<<"angle: "<<degrees;
-    // 如果需要，可以确保R是旋转矩阵（行列式为1），如果不是则取其转置
-    if (R.determinant() < 0) R = R * Eigen::Matrix2d::Identity() * -1;
-
-    // Step 6: 计算平移量。
-    Eigen::Vector2d translation = centroid2 - (R * centroid1.cast<double>());
-    for (int i = 0; i < T.cols(); ++i)
-    {
-        T(0,i) = translation(0,0);
-        T(1,i) = translation(1,0);
-    }
-//    qDebug()<<"T: "<<T(0,0)<<"  "<<T(1,0);
-//    // 验证
-//    Eigen::MatrixXd P1(2, points1.size());
-//    for (int i = 0; i < points1.size(); ++i)
-//    {
-//        P1(0,i) = points1[i].x(); // 将x坐标存储到第一列
-//        P1(1,i) = points1[i].y(); // 将y坐标存储到第二列
-//    }
-//    Eigen::MatrixXd mx = R * P1 + T;
-}
-
-QVector<QPointF> ICCP::computeRotationMatrix_2(QVector<QPointF> points1,QVector<QPointF> points2)
-{
-    Eigen::Vector2d centroid1 = Eigen::Vector2d::Zero(), centroid2 = Eigen::Vector2d::Zero();
-    for (const QPointF &p : points1) centroid1 += Eigen::Vector2d(p.x(), p.y());
-    for (const QPointF &p : points2) centroid2 += Eigen::Vector2d(p.x(), p.y());
-    centroid1 /= points1.size();
-    centroid2 /= points2.size();
-
-    double dx1 =  centroid2(0,0) - centroid1(0,0);
-    double dy1 =  centroid2(1,0) - centroid1(1,0);
-    // 计算旋转角度
-    int num = points1.size();
-    double points1_dy = points1[num-1].y()-points1[0].y();
-    double points1_dx = points1[num-1].x()-points1[0].x();
-    double points2_dy = points2[num-1].y()-points2[0].y();
-    double points2_dx = points2[num-1].x()-points2[0].x();
-
-    // xoy方位角计算 判断
-    double a1 = azimuth(points1_dx, points1_dy);
-    // XOY_C方位角计算 判断
-    double a2 = azimuth(points2_dx, points2_dy);
-
-    double a =  a2 - a1; // 旋转角度
-    double trans_dx = dx1; // x平移
-    double trans_dy = dy1; // y平移
-    double m = 0;
-
-    QVector<QPointF> temp=points1;
-    while(true)
-    {
-        //定义矩阵
-
-        Eigen::MatrixXd B(num*2, 4);
-        Eigen::MatrixXd l(num*2, 1);
-        //矩阵初始化
-        for (int i = 0; i < num; i++)
-        {
-            B(i*2, 0) = 1;
-            B(i*2, 1) = 0;
-            B(i*2, 2) = qCos(a)*temp[i].x()+qSin(a)*temp[i].y();
-            B(i*2, 3) = (1+m)*(-qSin(a)*temp[i].x()+qCos(a)*temp[i].y());
-            B(i*2+1, 0) = 0;
-            B(i*2+1, 1) = 1;
-            B(i*2+1, 2) = -qSin(a)*temp[i].x()+qCos(a)*temp[i].y();
-            B(i*2+1, 3) = (1+m)*(-qCos(a)*temp[i].x()-qSin(a)*temp[i].y());
-            l(i*2, 0) = points2[i].x() - temp[i].x();
-            l(i*2+1, 0) = points2[i].y() - temp[i].y();
-        }
-        //下面进行矩阵计算，并进行内符合指标的计算，此处P为单位矩阵，故略去
-        Eigen::MatrixXd BTB = B.transpose()*B;
-        Eigen::MatrixXd W = B.transpose()*l;
-        Eigen::MatrixXd Para = BTB.inverse()*W;
-        if (qAbs(Para(0)) < 0.01 && qAbs(Para(1)) < 0.01 && qAbs(Para(2)) < 0.01 && qAbs(Para(3)) < 0.01)
-            break;
-        trans_dx = trans_dx + Para(0);
-        trans_dy = trans_dy + Para(1);
-        m = m + Para(2);
-        a = a + Para(3);
-        Eigen::MatrixXd V = B * Para - l;
-        Eigen::MatrixXd sigma = V.transpose()*V;
-//        if (qSqrt(sigma(0,0)/num) < 0.001)
-//            break;
-//        Eigen::MatrixXd x1 = B * Para + l;
-        QVector<QPointF> points;
-        points.reserve(num); // 预分配内存以提高效率
-        for (int i = 0; i < num; ++i)
-        {
-            // 假设第一列是x，第二列是y
-            double x = trans_dx + (1+m)*(qCos(a)*points1[i].x()+qSin(a)*points1[i].y());
-            double y = trans_dy + (1+m)*(-qSin(a)*points1[i].x()+qCos(a)*points1[i].y());
-            points.append(QPointF(x, y));
-        }
-        QVector<QPointF> pNullVector1;
-        temp.swap(pNullVector1);
-        temp = points;
-    }
-
-    QVector<QPointF> points;
-    points.reserve(num); // 预分配内存以提高效率
-    for (int i = 0; i < num; ++i)
-    {
-        // 假设第一列是x，第二列是y
-        double x = trans_dx + (1+m)*(qCos(a)*points1[i].x()+qSin(a)*points1[i].y());
-        double y = trans_dy + (1+m)*(-qSin(a)*points1[i].x()+qCos(a)*points1[i].y());
-        points.append(QPointF(x, y));
-    }
-    return points;
-}
-
-QVector<QPointF> ICCP::computeMatrixNew(const QVector<QPointF>& insP,Eigen::Matrix2d &R,Eigen::MatrixXd &T)
-{
-    Eigen::MatrixXd P1(2, insP.size());
-    for (int i = 0; i < insP.size(); ++i)
-    {
-        P1(0,i) = insP[i].x(); // 将x坐标存储到第一列
-        P1(1,i) = insP[i].y(); // 将y坐标存储到第二列
-    }
-    Eigen::MatrixXd mx = R * P1 + T;
-    return eigenMatrixToQVector(mx);
 }
 
 double ICCP::calculateDifferences(const QVector<QPointF>& points1, const QVector<QPointF>& points2)
@@ -662,14 +467,6 @@ QVector<QPointF> ICCP::iccp(QVector<QVector<double>> data,
     return X;
 }
 
-void ICCP::outResult(QVector<QPointF> X)
-{
-//    for (int i=0;i<X.size();i++)
-//    {
-//        qDebug()<<X[i].x()<<" "<<X[i].y();
-//    }
-}
-
 void ICCP::totxt(QVector<QPointF> p,QString file)
 {
     QFile dataFile(file);
@@ -684,92 +481,6 @@ void ICCP::totxt(QVector<QPointF> p,QString file)
     }
     // 关闭文件
     dataFile.close();
-}
-
-QVector<QPointF> ICCP::computeRotationMatrix_3(QVector<QPointF> points1,QVector<QPointF> points2)
-{
-    Eigen::Vector2d centroid1 = Eigen::Vector2d::Zero(), centroid2 = Eigen::Vector2d::Zero();
-    for (const QPointF &p : points1) centroid1 += Eigen::Vector2d(p.x(), p.y());
-    for (const QPointF &p : points2) centroid2 += Eigen::Vector2d(p.x(), p.y());
-    centroid1 /= points1.size();
-    centroid2 /= points2.size();
-
-    double dx1 =  centroid2(0,0) - centroid1(0,0);
-    double dy1 =  centroid2(1,0) - centroid1(1,0);
-    // 计算旋转角度
-    int num = points1.size();
-    double points1_dy = points1[num-1].y()-points1[0].y();
-    double points1_dx = points1[num-1].x()-points1[0].x();
-    double points2_dy = points2[num-1].y()-points2[0].y();
-    double points2_dx = points2[num-1].x()-points2[0].x();
-
-    // xoy方位角计算 判断
-    double a1 = azimuth(points1_dx, points1_dy);
-    // XOY_C方位角计算 判断
-    double a2 = azimuth(points2_dx, points2_dy);
-
-    double a =  0; // 旋转角度
-    double trans_dx = 0; // x平移
-    double trans_dy = 0; // y平移
-
-//    QVector<QPointF> temp=points1;
-//    while(true)
-//    {
-        //定义矩阵
-
-        Eigen::MatrixXd B(num*2, 3);
-        Eigen::MatrixXd l(num*2, 1);
-        //矩阵初始化
-        for (int i = 0; i < num; i++)
-        {
-            B(i*2, 0) = 1;
-            B(i*2, 1) = 0;
-            B(i*2, 2) = (-qSin(a)*points1[i].x()+qCos(a)*points1[i].y());
-            B(i*2+1, 0) = 0;
-            B(i*2+1, 1) = 1;
-            B(i*2+1, 2) =(-qCos(a)*points1[i].x()-qSin(a)*points1[i].y());
-            l(i*2, 0) = points2[i].x() - points1[i].x();
-            l(i*2+1, 0) = points2[i].y() - points1[i].y();
-        }
-        //下面进行矩阵计算，并进行内符合指标的计算，此处P为单位矩阵，故略去
-        Eigen::MatrixXd BTB = B.transpose()*B;
-        Eigen::MatrixXd W = B.transpose()*l;
-        Eigen::MatrixXd Para = BTB.inverse()*W;
-//        if (qAbs(Para(0)) < 0.001 && qAbs(Para(1)) < 0.001 && qAbs(Para(2)) < 0.00001)
-//            break;
-        trans_dx = trans_dx + Para(0);
-        trans_dy = trans_dy + Para(1);
-        a = a + Para(2);
-        Eigen::MatrixXd V = B * Para - l;
-        Eigen::MatrixXd sigma = V.transpose()*V;
-//        if (qSqrt(sigma(0,0)/num) < 0.001)
-//            break;
-//        Eigen::MatrixXd x1 = B * Para + l;
-//        QVector<QPointF> points;
-//        points.reserve(num); // 预分配内存以提高效率
-//        for (int i = 0; i < num; ++i)
-//        {
-//            // 假设第一列是x，第二列是y
-//            double x = trans_dx + (qCos(a)*points1[i].x()+qSin(a)*points1[i].y());
-//            double y = trans_dy + (-qSin(a)*points1[i].x()+qCos(a)*points1[i].y());
-//            points.append(QPointF(x, y));
-//        }
-//        QVector<QPointF> pNullVector1;
-//        temp.swap(pNullVector1);
-//        temp = points;
-//    }
-//    trans_dx = dx1; // x平移
-//    trans_dy = dy1; // y平移
-    QVector<QPointF> points;
-    points.reserve(num); // 预分配内存以提高效率
-    for (int i = 0; i < num; ++i)
-    {
-        // 假设第一列是x，第二列是y
-        double x = trans_dx + (qCos(a)*points1[i].x()+qSin(a)*points1[i].y());
-        double y = trans_dy + (-qSin(a)*points1[i].x()+qCos(a)*points1[i].y());
-        points.append(QPointF(x, y));
-    }
-    return points;
 }
 
 QVector<QPointF> ICCP::computeRotationMatrix_4(QVector<QPointF> points11,QVector<QPointF> points22)
@@ -927,58 +638,52 @@ void ICCP::drawResult(QVector<QPointF> X,QVector<QVector<double>> matrix,QVector
 QVector<QPointF> ICCP::cal(QString data,QString ins,QString real,double thr)
 {
     QVector<QVector<double>> matrix = ReadBackground(data);
+    if (matrix.isEmpty() || matrix[0].isEmpty()) {
+        qWarning() << "ICCP::cal: background grid is empty, aborting (file:" << data << ")";
+        return QVector<QPointF>();
+    }
     QVector<QPointF> REAL = readPointsFromFile(real);
     QVector<magPoint> insP = ReadINS(ins);
     QVector<QPointF> X = iccp(matrix,insP,thr);
-    // double sumOfSquares = 0.0;
-    //     for (int i = 0; i < REAL.size(); ++i) {
-    //         QPointF error = REAL[i] - X[i]; // 计算误差
-    //         sumOfSquares += error.x() * error.x() + error.y() * error.y(); // 累加误差的平方
-    //     }
-
-    //     double rms = std::sqrt(sumOfSquares / REAL.size()); // 计算RMS
-
-    //     // 将RMS保存到文件
-    //     QFile file("navigation_accuracy.txt");
-    //     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-    //         throw std::runtime_error("Cannot open file for writing.");
-    //     }
-
-    //     QTextStream out(&file);
-    // out << "RMS Error: " << rms << endl;
-    // finalRMS = rms;
     totxt(X,"iccp_out.txt");
     drawResult(X,matrix,REAL,insP);
-    outResult(X);
     return X;
 }
 
 QVector<QPointF> ICCP::cal(QString data,QString ins,QString tercomResult,QString real,double thr)
 {
     QVector<QVector<double>> matrix = ReadBackground(data);
+    if (matrix.isEmpty() || matrix[0].isEmpty()) {
+        qWarning() << "ICCP::cal: background grid is empty, aborting (file:" << data << ")";
+        return QVector<QPointF>();
+    }
     QVector<QPointF> REAL = readPointsFromFile(real);
     QVector<magPoint> insP = ReadINS(tercomResult);
     QVector<magPoint> insOrigin = ReadINS(ins);
     QVector<QPointF> X = iccp(matrix,insP,thr);
     double sumOfSquares = 0.0;
-        for (int i = 0; i < REAL.size(); ++i) {
-            QPointF error = REAL[i] - X[i]; // 计算误差
-            sumOfSquares += error.x() * error.x() + error.y() * error.y(); // 累加误差的平方
-        }
+    const int n = qMin(REAL.size(), X.size());
+    if (REAL.size() != X.size()) {
+        qWarning() << "ICCP::cal: REAL.size()=" << REAL.size()
+                   << "does not match X.size()=" << X.size()
+                   << "; RMS computed over" << n << "matching points.";
+    }
+    for (int i = 0; i < n; ++i) {
+        QPointF error = REAL[i] - X[i]; // 计算误差
+        sumOfSquares += error.x() * error.x() + error.y() * error.y(); // 累加误差的平方
+    }
 
-        double rms = std::sqrt(sumOfSquares / REAL.size()); // 计算RMS
+    double rms = (n > 0) ? std::sqrt(sumOfSquares / n) : 0.0; // 计算RMS
 
-        // 将RMS保存到文件
-        QFile file("navigation_accuracy.txt");
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            throw std::runtime_error("Cannot open file for writing.");
-        }
+    // 将RMS保存到文件
+    QFile file("navigation_accuracy.txt");
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qWarning() << "ICCP::cal: Cannot open navigation_accuracy.txt for writing.";
+    }
 
-        QTextStream out(&file);
+    QTextStream out(&file);
     out << "RMS Error: " << rms << endl;
-    finalRMS = rms;
     totxt(X,"iccp_out.txt");
     drawResult(X,matrix,REAL,insOrigin);
-    outResult(X);
     return X;
 }

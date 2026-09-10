@@ -7,10 +7,6 @@
 #include "ReadData.h"
 #include <QMessageBox>
 #include <QDebug>
-#include <QSqlDatabase>
-#include "database/databasemanager.h"
-#include <QSqlQuery>
-#include <QProcess>
 #include <QDateTime>
 
 namespace Ui {
@@ -24,8 +20,6 @@ class ImportForm : public QWidget
 public:
     explicit ImportForm(QWidget *parent = nullptr);
     ~ImportForm();
-    void xyz_toSQL(QFileInfo fileinfo,QString TableName);
-    void grd_toSQL(QFileInfo fileinfo,QString TableName);
     QString projectPath;
     QString txtPath;
 

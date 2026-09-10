@@ -9,9 +9,7 @@ class OmgGeoPoint// : public QObject
 public:
     //    explicit OmgGeoPoint(QObject *parent = nullptr);
     OmgGeoPoint();
-    OmgGeoPoint(float lat, float lon, float value);
     OmgGeoPoint(float lat, float lon, float value, float red, float green, float blue);
-    void setParameters(float lat, float lon, float value, float red, float green, float blue);
 
 
 public:
@@ -21,13 +19,6 @@ public:
     float red() const;
     float green() const;
     float blue() const;
-
-    void setLat(float lat);
-    void setLon(float lon);
-    void setValue(float value);
-    void setRed(float red);
-    void setGreen(float green);
-    void setBlue(float blue);
 
 
 

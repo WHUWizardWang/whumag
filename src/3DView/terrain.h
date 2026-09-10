@@ -15,7 +15,6 @@ class Terrain
 {
 public:
     Terrain();
-    Terrain(const QString &imagePath);
     const GLfloat *constData() const
     {
         return m_data.constData();
@@ -26,12 +25,9 @@ public:
     }
     int vertexCount() const
     {
-        return m_count / 6;
+        return m_count / 10;
     }
     void load();
-    void load(const QVector<double> &pnts, int width, int height);
-    void load(const QVector<double> &pnts, int width, int height, double scale);
-    void load(const QVector<double> &pnts, int width, int height, const QVector<QVector3D> &colors);
     void setScale(double scale_z);
 
     void setMode(int mode);
@@ -42,7 +38,6 @@ public:
     void setMaganoData(const VVf &magano);
     void setTerrainColorMap(const QVector<QVector3D> &colorMap);
     void setMaganoColorMap(const QVector<QVector3D> &colorMap);
-    void setDisplayMode(int mode);
     void calcuColorIndex();
     void addTerrainData();
     void addMaganoData();

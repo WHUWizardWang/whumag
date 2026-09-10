@@ -52,26 +52,19 @@ public:
     int                      getCellBit(bool v1,bool v2,bool v3, bool v4);                               // 判断格型
     QVector<QVector<int>>    getCellShift(QVector<QVector<bool>> bit);                                    // 构建格型矩阵
     void                     getLines(CountLine &result, QVector<QVector<int>> matrix,double isoValue, QVector<QVector<double>> data); // 提取线段
-    void                     draw_lines(CountLine lines,double m,double n);                               // 绘制线段
 
     // ===== 核心 ICP 接口 =====
     QVector<QPointF>         iccp(QVector<QVector<double>> data,const QVector<magPoint>& insP,double threshold);       // 执行 ICP
     QVector<QPointF>         cal(QString data,QString insP,QString real,double thr);                             // 简易调用1
     QVector<QPointF>         cal(QString data,QString insP,QString tercomResult,QString real,double thr);         // 简易调用2
-    void                     outResult(QVector<QPointF> X);                                                         // 输出结果
     void                     drawResult(QVector<QPointF> X,QVector<QVector<double>> matrix,QVector<QPointF> Real,QVector<magPoint> insP); // 绘图
 
     // ===== 公用工具函数 =====
-    QVector<QPointF>         eigenMatrixToQVector(const Eigen::MatrixXd& matrix);   // Eigen 转 QVector
     double                   azimuth(double dx, double dy);                        // 方位角计算
 
 protected:
     // ===== 旋转与变换计算 =====
-    QVector<QPointF>         computeRotationMatrix_2(QVector<QPointF> points1,QVector<QPointF> points2);
-    QVector<QPointF>         computeRotationMatrix_3(QVector<QPointF> points1,QVector<QPointF> points2);
     QVector<QPointF>         computeRotationMatrix_4(QVector<QPointF> points1,QVector<QPointF> points2);
-    void                     computeRotationMatrix(const QVector<QPointF>& insP, const QVector<QPointF>& PP,Eigen::Matrix2d &R,Eigen::MatrixXd &T);
-    QVector<QPointF>         computeMatrixNew(const QVector<QPointF>& insP,Eigen::Matrix2d &R,Eigen::MatrixXd &T);
     double                   calculateDifferences(const QVector<QPointF>& points1, const QVector<QPointF>& points2);
 
     // ===== 最近点与质心计算 =====
@@ -82,16 +75,14 @@ protected:
 
 private:
     // ===== 类成员变量 =====
-    double                   xmax;       // 数据最大经度
-    double                   xmin;       // 数据最小经度
-    double                   ymax;       // 数据最大纬度
-    double                   ymin;       // 数据最小纬度
-    double                   dx;         // 网格经度分辨率
-    double                   dy;         // 网格纬度分辨率
-    int                      xSize;      // 网格列数
-    int                      ySize;      // 网格行数
-    QVector<double>          x_bg,y_bg,z_bg; // 背景网格数据
-    double                   finalRMS;   // 最终均方根误差
+    double                   xmax = 0.0; // 数据最大经度
+    double                   xmin = 0.0; // 数据最小经度
+    double                   ymax = 0.0; // 数据最大纬度
+    double                   ymin = 0.0; // 数据最小纬度
+    double                   dx = 1.0;   // 网格经度分辨率
+    double                   dy = 1.0;   // 网格纬度分辨率
+    int                      xSize = 1;  // 网格列数
+    int                      ySize = 1;  // 网格行数
 
 public:
     QCustomPlot*             customPlot; // 绘图控件指针

@@ -6,7 +6,6 @@
 #include <QFile>
 #include <QDebug>
 #include "project.h"
-#include "gmparameters.h"
 
 class GeoMagnetismProject : public Project
 {
@@ -22,13 +21,6 @@ public:
 signals:
 
 private:
-    template<typename T>
-    void DeletePointerInVector(QVector<T*>& vec_ptr_t);
-
-    QVector<GlobalGeomagModel*> vec_global_geomag_model_;
-    QVector<MagneticAnomaly*> vec_magnetic_anomaly_;
-    QVector<SurveyData*> vec_survey_data_;
-    QVector<BackgroundMap*> vec_background_map_;
 
 
 };

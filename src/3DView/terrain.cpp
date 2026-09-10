@@ -5,144 +5,12 @@ Terrain::Terrain(): m_count(0)
     m_count = 0;
     m_mode = 0;
 }
-Terrain::Terrain(const QString &imagePath)
-    : m_count(0)
-{
-    QImage image(imagePath);
-    if (image.isNull())
-    {
-        return;
-    }
-
-    int ncols = image.width();
-    int nrows = image.height();
-    m_data.resize((ncols - 1) * (nrows - 1) * 6 * 6);
-
-    for (int i = 0; i < nrows - 1; ++i)
-    {
-        for (int j = 0; j < ncols - 1; ++j)
-        {
-            double z1 = qGray(image.pixel(j, i)) * 1.0 / 256;
-            double z2 = qGray(image.pixel(j + 1, i)) * 1.0 / 256;
-            double z3 = qGray(image.pixel(j + 1, i + 1)) * 1.0 / 256;
-            double z4 = qGray(image.pixel(j, i + 1)) * 1.0 / 256;
-            QVector3D p1(i * 1.0 / nrows, j * 1.0 / ncols, z1);
-            QVector3D p2(i * 1.0 / nrows, (j + 1) * 1.0 / ncols, z2);
-            QVector3D p3((i + 1) * 1.0 / nrows, (j + 1) * 1.0 / ncols, z3);
-            QVector3D p4((i + 1) * 1.0 / nrows, j * 1.0 / ncols, z4);
-            normalize(p1);
-            normalize(p2);
-            normalize(p3);
-            normalize(p4);
-            quad(p1, p2, p3, p4);
-        }
-    }
-}
-
 void Terrain::load()
 {
     calcuColorIndex();
     addTerrainData();
     addMaganoData();
 }
-
-void Terrain::load(const QVector<double> &pnts, int width, int height)
-{
-    double minZ = *(std::min_element(pnts.begin(), pnts.end()));
-    double maxZ = *(std::max_element(pnts.begin(), pnts.end()));
-    m_data.clear();
-    m_count = 0;
-    m_data.resize((width - 1) * (height - 1) * 6 * 6);
-
-    //    m_scale = scale;
-    double offset = 0.5;// * scale;
-    for (int i = 0; i < height - 1; ++i)
-    {
-        for (int j = 0; j < width - 1; ++j)
-        {
-            double z1 = normalize(pnts[i * width + j], minZ, maxZ) - offset;
-            double z2 = normalize(pnts[i * width + j + 1], minZ, maxZ) - offset;
-            double z3 = normalize(pnts[(i + 1) * width + j + 1], minZ, maxZ) - offset;
-            double z4 = normalize(pnts[(i + 1) * width + j], minZ, maxZ) - offset;
-            QVector3D p1(normalize(i, 0, height - 1), normalize(j, 0, width - 1), z1);
-            QVector3D p2(normalize(i, 0, height - 1), normalize(j + 1, 0, width - 1), z2);
-            QVector3D p3(normalize(i + 1, 0, height - 1), normalize(j + 1, 0, width - 1), z3);
-            QVector3D p4(normalize(i + 1, 0, height - 1), normalize(j, 0, width - 1), z4);
-            normalize(p1);
-            normalize(p2);
-            normalize(p3);
-            normalize(p4);
-            quad(p1, p2, p3, p4);
-        }
-    }
-}
-
-void Terrain::load(const QVector<double> &pnts, int width, int height, const QVector<QVector3D> &colors)
-{
-    double minZ = *(std::min_element(pnts.begin(), pnts.end()));
-    double maxZ = *(std::max_element(pnts.begin(), pnts.end()));
-    m_data.clear();
-    m_count = 0;
-    m_data.resize((width - 1) * (height - 1) * 6 * 9);
-
-    //    m_scale = scale;
-    double offset = 0.5;// * scale;
-    for (int i = 0; i < height - 1; ++i)
-    {
-        for (int j = 0; j < width - 1; ++j)
-        {
-            double z1 = normalize(pnts[i * width + j], minZ, maxZ) - offset;
-            double z2 = normalize(pnts[i * width + j + 1], minZ, maxZ) - offset;
-            double z3 = normalize(pnts[(i + 1) * width + j + 1], minZ, maxZ) - offset;
-            double z4 = normalize(pnts[(i + 1) * width + j], minZ, maxZ) - offset;
-            QVector3D p1(normalize(i, 0, height - 1), normalize(j, 0, width - 1), z1);
-            QVector3D p2(normalize(i, 0, height - 1), normalize(j + 1, 0, width - 1), z2);
-            QVector3D p3(normalize(i + 1, 0, height - 1), normalize(j + 1, 0, width - 1), z3);
-            QVector3D p4(normalize(i + 1, 0, height - 1), normalize(j, 0, width - 1), z4);
-            normalize(p1);
-            normalize(p2);
-            normalize(p3);
-            normalize(p4);
-            QVector3D c1 = colors[i * width + j];
-            QVector3D c2 = colors[i * width + j + 1];
-            QVector3D c3 = colors[(i + 1) * width + j + 1];
-            QVector3D c4 = colors[(i + 1) * width + j];
-            quad(p1, p2, p3, p4, c1, c2, c3, c4);
-        }
-    }
-}
-
-void Terrain::load(const QVector<double> &pnts, int width, int height, double scale)
-{
-    double minZ = *(std::min_element(pnts.begin(), pnts.end()));
-    double maxZ = *(std::max_element(pnts.begin(), pnts.end()));
-    m_data.clear();
-    m_count = 0;
-    m_data.resize((width - 1) * (height - 1) * 6 * 6);
-
-    m_scale = scale;
-    double offset = 0.5 * scale;
-    for (int i = 0; i < height - 1; ++i)
-    {
-        for (int j = 0; j < width - 1; ++j)
-        {
-            double z1 = scale * normalize(pnts[i * width + j], minZ, maxZ) - offset;
-            double z2 = scale * normalize(pnts[i * width + j + 1], minZ, maxZ) - offset;
-            double z3 = scale * normalize(pnts[(i + 1) * width + j + 1], minZ, maxZ) - offset;
-            double z4 = scale * normalize(pnts[(i + 1) * width + j], minZ, maxZ) - offset;
-            QVector3D p1(normalize(i, 0, height - 1), normalize(j, 0, width - 1), z1);
-            QVector3D p2(normalize(i, 0, height - 1), normalize(j + 1, 0, width - 1), z2);
-            QVector3D p3(normalize(i + 1, 0, height - 1), normalize(j + 1, 0, width - 1), z3);
-            QVector3D p4(normalize(i + 1, 0, height - 1), normalize(j, 0, width - 1), z4);
-            normalize(p1);
-            normalize(p2);
-            normalize(p3);
-            normalize(p4);
-            quad(p1, p2, p3, p4);
-        }
-    }
-}
-
 
 void Terrain::add(const QVector3D &v, const QVector3D &n)
 {
@@ -268,15 +136,6 @@ void Terrain::setMaganoData(const VVf &magano)
     m_magano = magano;
 }
 
-void Terrain::setDisplayMode(int mode)
-{
-    if (mode != 0 && mode != 1 & mode != 2)
-    {
-        mode = 0;
-    }
-    m_mode = mode;
-}
-
 void Terrain::setTerrainColorMap(const QVector<QVector3D> &colorMap)
 {
     m_t_colorMap = colorMap;
@@ -328,8 +187,15 @@ void Terrain::calcuColorIndex()
         {
             if (m_mask[i][j])
             {
-                m_t_colorIndex[i][j] = static_cast<int>((m_terrain[i][j] - minZ) / (maxZ - minZ) * (m_t_colorMap.size() - 1));
-                m_m_colorIndex[i][j] = static_cast<int>((m_magano[i][j] - minV) / (maxV - minV) * (m_m_colorMap.size() - 1));
+                if (maxZ > minZ)
+                    m_t_colorIndex[i][j] = static_cast<int>((m_terrain[i][j] - minZ) / (maxZ - minZ) * (m_t_colorMap.size() - 1));
+                else
+                    m_t_colorIndex[i][j] = 0;
+
+                if (maxV > minV)
+                    m_m_colorIndex[i][j] = static_cast<int>((m_magano[i][j] - minV) / (maxV - minV) * (m_m_colorMap.size() - 1));
+                else
+                    m_m_colorIndex[i][j] = 0;
             }
         }
     }

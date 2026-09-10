@@ -1,55 +1,16 @@
-#ifndef OMGVALIDATOR_H
-#define OMGVALIDATOR_H
+#ifndef WMM_OMGVALIDATOR_H
+#define WMM_OMGVALIDATOR_H
 
 #include <QLineEdit>
 #include <QRegExpValidator>
 #include <QDate>
 
-namespace Omg
+namespace wmm
 {
-    class OmgValidator;
-}
-
-typedef struct
-{
-    double x, y, z;
-} AnoPoint;
 
 class OmgValidator
 {
 public:
-    static void setValidatorLat(QLineEdit *line_edit)
-    {
-        // -90.0~90.0
-        QRegExp rx("^(-?90|[1-8]?\\d(\\.\\d{1,8})?)$");
-        QRegExpValidator *pReg = new QRegExpValidator(rx);
-        line_edit->setValidator(pReg);
-    }
-
-    static void setValidatorLon(QLineEdit *line_edit)
-    {
-        // -180.0~180.0
-        QRegExp rx("^-?180|((((1[0-7])?|\\d)?\\d)(\\.\\d{1,8})?)$");
-        QRegExpValidator *pReg = new QRegExpValidator(rx);
-        line_edit->setValidator(pReg);
-    }
-
-    static void setValidatorHeight(QLineEdit *line_edit)
-    {
-        // -9999.9999~9999.9999
-        QRegExp rx("^(-?[0]|-?[1-9][0-9]{0,4})(?:\\.\\d{1,4})?$");
-        QRegExpValidator *pReg = new QRegExpValidator(rx);
-        line_edit->setValidator(pReg);
-    }
-
-    static void setValidatorStep(QLineEdit *line_edit)
-    {
-        // 0~9999.9999
-        QRegExp rx("^([0]|[1-9][0-9]{0,4})(?:\\.\\d{1,4})?$");
-        QRegExpValidator *pReg = new QRegExpValidator(rx);
-        line_edit->setValidator(pReg);
-    }
-
     static double varifyTextLat(const QString &str, bool *ok)
     {
         double num_min = -90.0;
@@ -147,4 +108,6 @@ typedef struct
     bool valid;
 } MagHeader;
 
-#endif // OMGVALIDATOR_H
+} // namespace wmm
+
+#endif // WMM_OMGVALIDATOR_H

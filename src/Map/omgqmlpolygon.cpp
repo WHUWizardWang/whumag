@@ -36,16 +36,6 @@ OmgQmlPolygon::OmgQmlPolygon(QObject *parent)
     qDebug() << "=== 数据加载调试结束 ===";
 }
 
-OmgQmlPolygon::OmgQmlPolygon(const OmgQmlPolygon &polygon)
-{
-    m_lat_rsl = polygon.m_lat_rsl;
-    m_lon_rsl = polygon.m_lon_rsl;
-    m_points = polygon.m_points;
-
-    m_raster_emag2 = polygon.m_raster_emag2;
-    m_raster_mamea = polygon.m_raster_mamea;
-}
-
 OmgQmlPolygon::~OmgQmlPolygon()
 {
 
@@ -71,11 +61,6 @@ qreal OmgQmlPolygon::minLon() const
     return m_min_lon;
 }
 
-const QVariantList &OmgQmlPolygon::points() const
-{
-    return m_points;
-}
-
 void OmgQmlPolygon::setLatRsl(qreal lat_rsl)
 {
     m_lat_rsl = lat_rsl;
@@ -96,19 +81,9 @@ void OmgQmlPolygon::setMinLon(qreal min_lon)
     m_min_lon = min_lon;
 }
 
-void OmgQmlPolygon::setPoints(const QVariantList &pnts)
-{
-    m_points = pnts;
-}
-
 void OmgQmlPolygon::addPoint(const OmgQmlPoint &pnt)
 {
     m_points.append(QVariant::fromValue(pnt));
-}
-
-void OmgQmlPolygon::clear()
-{
-    m_points.clear();
 }
 
 OmgQmlPoint OmgQmlPolygon::pointConvertToQml(const OmgGeoPoint &geoPnt)
@@ -126,11 +101,6 @@ void OmgQmlPolygon::addNode(qreal lat, qreal lon)
 void OmgQmlPolygon::clearNodes()
 {
     m_polygon.clear();
-}
-
-int OmgQmlPolygon::pointCount()
-{
-    return m_points.size();
 }
 
 void OmgQmlPolygon::getInertnalPoints(int flag)
@@ -215,37 +185,11 @@ void OmgQmlPolygon::getInertnalPoints(int flag)
     }
 
 
-    m_pnts = geoPnts;
     m_points.clear();
     for (auto iter = geoPnts.cbegin(); iter != geoPnts.cend(); ++iter)
     {
         addPoint(pointConvertToQml(*iter));
     }
-}
-
-qreal OmgQmlPolygon::pointLat(int index)
-{
-    return m_pnts[index].lat();
-}
-
-qreal OmgQmlPolygon::pointLon(int index)
-{
-    return m_pnts[index].lon();
-}
-
-qreal OmgQmlPolygon::pointRed(int index)
-{
-    return m_pnts[index].red();
-}
-
-qreal OmgQmlPolygon::pointGreen(int index)
-{
-    return m_pnts[index].green();
-}
-
-qreal OmgQmlPolygon::pointBlue(int index)
-{
-    return m_pnts[index].blue();
 }
 
 void OmgQmlPolygon::setRadio(qreal radio)

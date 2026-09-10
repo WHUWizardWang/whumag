@@ -37,14 +37,11 @@ namespace Geomagnetic {
         TercomMatching(double x_step , double y_step)
             : x_step(x_step), y_step(y_step) {};
         TercomMatching();
-        TercomMatching(const Datapoint& inputData, const Datapoint& inputBase,const Datapoint& inputINS);
         Datapoint match();
         int ReadBackground(const QString &filePath);
         void ReadINS(const QString &filePath);
         void ReadTruePath(const QString &filePath);
-        void getCentroid(const Datapoint& data, double& xg, double& yg);
         void setReferencePoint(const SinglePoint& refPoint);
-        void printData() const;
         Datapoint matchWithAdaptiveRotation();
         void saveResult(const QString &filePath,const Datapoint &result);
         void drawResult(Datapoint matchResult);
@@ -70,7 +67,6 @@ namespace Geomagnetic {
 
         // Helper functions
         double calculateDistance(const INSData& insData, const MapData& base) const;
-        double hausdorffDistance(const SinglePoint& point1, const SinglePoint& point2) const;
         double IDW(const INSData& insData, size_t K = 10) const;
         SinglePoint rotatePoint(const SinglePoint& point, double angle, const SinglePoint& center) const;
         double calculateMSD(const std::vector<INSData> track, const std::vector<INSData> insdata) const;

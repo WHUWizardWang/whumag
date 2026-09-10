@@ -1,6 +1,6 @@
 #include "extension.h"
 
-#include "fftw.h"
+#include "statsutil.h"
 
 FFTW::FFTW()
 {
@@ -95,6 +95,13 @@ void yanTuo::createGrid(const Geomagnetic::Datapoint& datapoints,
                         Eigen::MatrixXd& T1)
 {
     if (datapoints.empty()) return;
+
+    if (step_x <= 0.0 || step_y <= 0.0 || !std::isfinite(step_x) || !std::isfinite(step_y)) {
+        X1.resize(0, 0);
+        Y1.resize(0, 0);
+        T1.resize(0, 0);
+        return;
+    }
 
     // Step 1: 提取并排序唯一的输入坐标 (已为米单位)
     std::vector<double> xs, ys;
@@ -338,48 +345,25 @@ void yanTuo::TongJi(std::vector<double>dt, std::vector<double>down)
         [](double a, double b) { return a - b; });
 
     // 计算统计数据
-    double max_dt = *std::max_element(dt.begin(), dt.end());
-    double min_dt = *std::min_element(dt.begin(), dt.end());
-    double sum_dt = std::accumulate(dt.begin(), dt.end(), 0.0);
-    double mean_dt = sum_dt / dt.size();
-    double sum_sq_diff_dt = std::inner_product(dt.begin(), dt.end(), dt.begin(), 0.0,
-        [](double sum, double diff) { return sum + diff * diff; },
-        [](double a, double b) { return a + b; });
-    double std_dt = std::sqrt(sum_sq_diff_dt / dt.size());
-
-    double max_down = *std::max_element(down.begin(), down.end());
-    double min_down = *std::min_element(down.begin(), down.end());
-    double sum_down = std::accumulate(down.begin(), down.end(), 0.0);
-    double mean_down = sum_down / down.size();
-    double sum_sq_diff_down = std::inner_product(down.begin(), down.end(), down.begin(), 0.0,
-        [](double sum, double diff) { return sum + diff * diff; },
-        [](double a, double b) { return a + b; });
-    double std_down = std::sqrt(sum_sq_diff_down / down.size());
-
-    double max_delt = *std::max_element(delt.begin(), delt.end());
-    double min_delt = *std::min_element(delt.begin(), delt.end());
-    double sum_delt = std::accumulate(delt.begin(), delt.end(), 0.0);
-    double mean_delt = sum_delt / delt.size();
-    double sum_sq_diff = std::inner_product(delt.begin(), delt.end(), delt.begin(), 0.0,
-        [](double sum, double diff) { return sum + diff * diff; },
-        [](double a, double b) { return a + b; });
-    double std_delt = std::sqrt(sum_sq_diff / delt.size());
+    StatsResult s_dt = computeStats(dt);
+    StatsResult s_down = computeStats(down);
+    StatsResult s_delt = computeStats(delt);
 
     // 输出统计数据
 
     out = out+"Statistics of the difference between theoretical and computed values:\n";
-    out = out + "Max_dt: " +QString::number(max_dt) +
-            ", Min_dt: " +QString::number(min_dt) +
-            ", Mean_dt: " +QString::number(mean_dt) +
-            ", Std Dev_dt: " +QString::number(std_dt) +"\n";
-    out = out + "Max_down: " +QString::number(max_down)+
-            ", Min_down: " +QString::number(min_down)+
-            ", Mean_down: " +QString::number(mean_down)+
-            ", Std Dev_down: " +QString::number(std_down)+"\n";
-    out = out + "Max_delt: " +QString::number(max_delt)+
-            ", Min_delt: "  +QString::number(min_delt) +
-            ", Mean_delt: " +QString::number(mean_delt)+
-            ", Std Dev_delt: " +QString::number(std_delt)+"\n";
+    out = out + "Max_dt: " +QString::number(s_dt.max) +
+            ", Min_dt: " +QString::number(s_dt.min) +
+            ", Mean_dt: " +QString::number(s_dt.mean) +
+            ", Std Dev_dt: " +QString::number(s_dt.stddev) +"\n";
+    out = out + "Max_down: " +QString::number(s_down.max)+
+            ", Min_down: " +QString::number(s_down.min)+
+            ", Mean_down: " +QString::number(s_down.mean)+
+            ", Std Dev_down: " +QString::number(s_down.stddev)+"\n";
+    out = out + "Max_delt: " +QString::number(s_delt.max)+
+            ", Min_delt: "  +QString::number(s_delt.min) +
+            ", Mean_delt: " +QString::number(s_delt.mean)+
+            ", Std Dev_delt: " +QString::number(s_delt.stddev)+"\n";
 
 }
 void yanTuo::up_run(Geomagnetic::Datapoint& datapoints, double step_x, double step_y, double h, std::string outfile)
@@ -393,18 +377,15 @@ void yanTuo::up_run(Geomagnetic::Datapoint& datapoints, double step_x, double st
     col2 = data.cols();
 
     //第二步，进行二维FFT变换
-    fx = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * data.rows() * data.cols());
     fx = fftw.fft_2d(data, row2, col2);
     fftw.fftshift(fx, row2, col2);
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
-    ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     ff = calculation_up(step_x, step_y, h, row2, col2, fx);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
     //第五步 傅立叶逆变换，重构延拓后的磁异常
-    upT = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     upT = fftw.ifft_2d(row2, col2, ff);
     up = get_result(upT, T1, data);
     fftw_free(upT);
@@ -500,6 +481,7 @@ void yanTuo::up_run_BL(Geomagnetic::Datapoint& datapoints, double step_x_deg, do
             if (temp_fx != fx) {
                 // 如果 fft_2d 返回了不同的指针，需要复制数据
                 memcpy(fx, temp_fx, sizeof(fftw_complex) * row2 * col2);
+                fftw_free(temp_fx);
             }
 
             fftw.fftshift(fx, row2, col2);
@@ -524,6 +506,7 @@ void yanTuo::up_run_BL(Geomagnetic::Datapoint& datapoints, double step_x_deg, do
             fftw_complex* temp_ff = calculation_up(step_x, step_y, h, row2, col2, fx);
             if (temp_ff != ff) {
                 memcpy(ff, temp_ff, sizeof(fftw_complex) * row2 * col2);
+                fftw_free(temp_ff);
             }
 
             fftw.fftshift(ff, row2, col2);
@@ -558,6 +541,7 @@ void yanTuo::up_run_BL(Geomagnetic::Datapoint& datapoints, double step_x_deg, do
             fftw_complex* temp_upT = fftw.ifft_2d(row2, col2, ff);
             if (temp_upT != upT) {
                 memcpy(upT, temp_upT, sizeof(fftw_complex) * row2 * col2);
+                fftw_free(temp_upT);
             }
 
             up = get_result(upT, T1, data);
@@ -630,18 +614,15 @@ void yanTuo::down_run(Geomagnetic::Datapoint& datapoints,double step_x, double s
     col2 = data.cols();
 
     //第二步 进行二维fft变换
-    fx = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * data.rows() * data.cols());
     fx = fftw.fft_2d(data, row2, col2);
     fftw.fftshift(fx, row2, col2);
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
-    ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     ff = calculation_down(step_x, step_y, h, row2, col2, fx, choice);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
     //第五步 傅立叶逆变换，重构延拓后的磁异常
-    downT = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     downT = fftw.ifft_2d(row2, col2, ff);
     down = get_result(downT, T1, data);
     fftw_free(downT);
@@ -699,18 +680,15 @@ void yanTuo::down_run_BL(Geomagnetic::Datapoint& datapoints,double step_x_deg, d
     col2 = data.cols();
 
     //第二步 进行二维fft变换
-    fx = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * data.rows() * data.cols());
     fx = fftw.fft_2d(data, row2, col2);
     fftw.fftshift(fx, row2, col2);
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
-    ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     ff = calculation_down(step_x, step_y, h, row2, col2, fx, choice);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
     //第五步 傅立叶逆变换，重构延拓后的磁异常
-    downT = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     downT = fftw.ifft_2d(row2, col2, ff);
     down = get_result(downT, T1, data);
     fftw_free(downT);
@@ -776,18 +754,15 @@ void yanTuo::evaluatePrecision(Geomagnetic::Datapoint& datapoints,bool useBL,
     col2 = data.cols();
 
     //第二步，进行二维FFT变换
-    fx = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * data.rows() * data.cols());
     fx = fftw.fft_2d(data, row2, col2);
     fftw.fftshift(fx, row2, col2);
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
-    ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     ff = calculation_up(step_x, step_y, h, row2, col2, fx);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
     //第五步 傅立叶逆变换，重构延拓后的磁异常
-    upT = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     upT = fftw.ifft_2d(row2, col2, ff);
     up = get_result(upT, T1, data);
     fftw_free(upT);
@@ -804,18 +779,15 @@ void yanTuo::evaluatePrecision(Geomagnetic::Datapoint& datapoints,bool useBL,
     col2 = data.cols();
 
     //第二步 进行二维fft变换
-    fx = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * data.rows() * data.cols());
     fx = fftw.fft_2d(data, row2, col2);
     fftw.fftshift(fx, row2, col2);
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
-    ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     ff = calculation_down(step_x, step_y, h, row2, col2, fx, choice);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
     //第五步 傅立叶逆变换，重构延拓后的磁异常
-    downT = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
     downT = fftw.ifft_2d(row2, col2, ff);
     down = get_result(downT, T1, data);
     fftw_free(downT);

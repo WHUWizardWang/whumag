@@ -126,20 +126,6 @@ void LSSVMPSO::get_L2()
     //cout << "Test" << MTestMagAnomaly << endl << endl;
 }
 
-/* ------ 粒子群优化：实现 ------ */
-void LSSVMPSO::run(Datapoint& all,Datapoint& train, Datapoint& test,QString out)
-{
-    ReadData_LSSVMPSO(train); // 读取数据
-    split(0.7); // 切分数据集
-//    setPara(); // 设置参数
-    get_L();    //构建误差方程
-    RandomlyInitial();  //随机初始化
-    Refresh();  // 迭代更新
-    RegressionFunc(all); //回归
-    save_para(all,rms); // 保存最优参数 和 rms
-    save_result(all,out); //保存结果文本
-}
-
 void LSSVMPSO::run(Datapoint& all,Datapoint& train,QString out)
 {
     ReadData_LSSVMPSO(train); // 读取数据

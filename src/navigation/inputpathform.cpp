@@ -9,7 +9,9 @@
 
 InputPathForm::InputPathForm(QWidget *parent) :
     QWidget(parent),
-    ui(new Ui::InputPathForm)
+    ui(new Ui::InputPathForm),
+    anav(nullptr),
+    st(nullptr)
 {
     ui->setupUi(this);
     ui->comboBox->addItem("TERCOM");
@@ -21,6 +23,8 @@ InputPathForm::InputPathForm(QWidget *parent) :
 
 InputPathForm::~InputPathForm()
 {
+    delete st;
+    delete anav;
     delete ui;
 }
 
@@ -201,6 +205,14 @@ void InputPathForm::navSITAN()
                 delete item->widget();
                 delete item;
             }
+        }
+
+        // 释放上一次成功运行遗留的 st（其 customPlot 已在上面的布局清理中被销毁，
+        // 这里先置空避免 ~SitanMatching() 中的 delete customPlot 造成二次释放）
+        if (st) {
+            st->customPlot = nullptr;
+            delete st;
+            st = nullptr;
         }
 
         ui->textBrowser->append("SITAN匹配导航计算开始...");
@@ -501,6 +513,13 @@ void InputPathForm::navAUTO()
             delete item->widget();
             delete item;
         }
+    }
+
+    // 释放上一次成功运行遗留的 anav（其 customPlot 已在上面的布局清理中被销毁）
+    if (anav) {
+        anav->customPlot = nullptr; // already destroyed by the layout-clearing loop above
+        delete anav;
+        anav = nullptr;
     }
 
     ui->textBrowser->append("开始自动计算");
