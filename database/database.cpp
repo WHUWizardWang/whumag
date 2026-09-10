@@ -8,7 +8,7 @@ database::database(QWidget *parent) :
 {
     // 1.<设置表格内容>
     ui->setupUi(this);
-    if (DatabaseManager::instance().initConnection())
+//    if (DatabaseManager::instance().initConnection())
     {
         qDebug() << "Database connection successful!";
         QSqlDatabase db = DatabaseManager::instance().getDatabase();
@@ -99,7 +99,6 @@ void database::on_pushButton_add_clicked()
     model->setData(index3,QString::number(ymin));
     QModelIndex index4 = model->index(row,7);
     model->setData(index4,QString::number(ymax));
-
 }
 
 void database::on_pushButton_delete_clicked()
@@ -146,13 +145,13 @@ void database::on_pushButton_show_clicked()
         QString filepath = model->data(model->index(list.at(i).row(),2)).toString();
         draw_form_->create_xyz_f(filepath,xx,yy,zz);
 //        draw_form_->set_HeatOrSactterView(xx,yy,zz);
-        draw_form_->set_heatMapView(xx,yy,zz);
+        draw_form_->autoset_heatMapView(xx,yy,zz);
         if (!draw_form_->magWarn)
             return;
         if (proPath.isEmpty())
-            draw_form_->set_ContourView(filepath);
+            draw_form_->autoset_contourView(xx,yy,zz);
         else
-            draw_form_->set_ContourView(filepath);
+            draw_form_->autoset_contourView(xx,yy,zz);
         draw_form_->show();
     }
 }

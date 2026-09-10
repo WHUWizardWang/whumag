@@ -7,6 +7,9 @@
 #include <QTreeWidgetItem>
 #include <QtQuickWidgets/QQuickWidget>
 #include <QtConcurrent/QtConcurrent>
+#include <QtConcurrent>
+#include <QFutureWatcher>
+
 #include <chrono>
 #include "buildprojectform.h"
 #include "importform.h"
@@ -70,7 +73,7 @@ private slots:
     double calculateRMS(const Geomagnetic::Datapoint &datapoints, const Geomagnetic::Datapoint &dataresults);
 
     void on_action_taylor_build_triggered();                // 基准图构建：泰勒多项式
-    void on_action_legendre_build_triggered();              // 基准图构建：legendre项式
+//    void on_action_legendre_build_triggered();              // 基准图构建：legendre项式
     void on_action_polyhedral_build_triggered();            // 基准图构建：多面函数
     void on_action_spline_build_triggered();                // 基准图构建：样条函数
     void on_action_compress_build_triggered();              // 基准图构建：压缩感知（python）
@@ -119,6 +122,8 @@ private slots:
 
     void on_action_xishukongzhong_triggered();
 
+    void on_action_3_triggered();
+
 private:
     void ProjectChanged();                                  // 更新工程树及历史工程信息
     void ProjectChanged_data();                             // 更新实测数据树的信息
@@ -139,6 +144,7 @@ private:
     ReferenceMap        *referenceMap_form_;                // 整取建模窗口
     AutoReferenceMap    *autoReferenceMap_form_;            // 自动建模窗口
 
+    QListWidget         *taskList;                         // 任务列表
     GeoMagnetismProject *geomag_proj_;                      // 地磁工程类实例，记录工程各类参数
     QString             last_opened_path_;                  // 上次打开的文件夹路径
     QString             historical_proj_file_path_;         // 记录历史工程路径的文件路径

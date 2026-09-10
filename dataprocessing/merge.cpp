@@ -266,7 +266,56 @@ void rongHe::createMap(double min_B, double min_L, double max_B, double max_L,do
         }
     }
 }
+void rongHe::createMap2(double min_B, double min_L, double max_B, double max_L,double Bint,double Lint)
+{
 
+    //初始化内插区域边界
+    double B1 = Bint;
+    double B2 = Bint;
+    double L1 = Lint;
+    double L2 = Lint;
+
+    //根据中心点扩展生成容器
+    int i1 = 1;
+    while (B1 > min_B)
+    {
+        B1 = B1 - Bint;
+        i1 = i1 + 1;
+    }
+    int i2 = 1;
+    while (B2 < max_B)
+    {
+        B2 = B2 + Bint;
+        i2 = i2 + 1;
+    }
+    int row = i1 + i2 + 1;//记录内插容器行数
+    int i3 = 1;
+    while (L1 > min_L)
+    {
+        L1 = L1 - Lint;
+        i3 = i3 + 1;
+    }
+    int i4 = 1;
+    while (L2 < max_L)
+    {
+        L2 = L2 + Lint;
+        i4 = i4 + 1;
+    }
+    int col = i3 + i4 + 1;//记录内插容器列数
+
+    Point point;
+    for (int i = 0; i < row ; i++)
+    {
+        for (int j = 0; j < col; j++)
+        {
+            point.B = B1 + i * Bint;
+            point.L = L1 + j * Lint;
+            point.T = 0.0;
+            point.m = 0.0;
+            point0.push_back(point);
+        }
+    }
+}
 void rongHe::rongHe_run(std::string infile0, double delt_phi0, double delt_lamda0)
 {
 	// *******  读入文件  ******
@@ -298,6 +347,26 @@ void rongHe::rongHe_run2(double delt_phi0, double delt_lamda0,
 
     //传入待融合的多源数据文件
     createMap(min_B, min_L, max_B, max_L,Bint,Lint);
+    readfile();
+
+    //***** 数据融合 *****
+    data = point0;  //同步模板格网平面坐标信息
+
+    //汇总多源数据
+    allPoints(doc_points, all_point);
+
+    //构建内插模型
+    data = calModel(delt_phi0, delt_lamda0);
+
+    std::cout << "融合程序执行完毕" << endl;
+}
+
+void rongHe::rongHe_run3(double delt_phi0, double delt_lamda0,
+                         double min_B, double min_L, double max_B, double max_L,double Bint,double Lint)
+{
+    // fenqujianmo
+    //传入待融合的多源数据文件
+    createMap2(min_B, min_L, max_B, max_L,Bint,Lint);
     readfile();
 
     //***** 数据融合 *****

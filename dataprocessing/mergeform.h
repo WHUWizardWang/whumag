@@ -33,6 +33,8 @@ private slots:
     void on_chooseFiles_clicked();
     void on_confirm_clicked();
 
+    void on_pushButton_clicked();
+
 signals:
     void textUpdated(const QString &text); // 定义信号
     void treeUpdated(int flag); // 定义信号

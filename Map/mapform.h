@@ -31,6 +31,7 @@ public:
 public slots:
     void onDrawStateChanged(int state);
 
+
 private:
     void initQmlMap();
     void loadJson(const QString& file_path);

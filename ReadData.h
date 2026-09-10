@@ -9,7 +9,7 @@
 #include "DataStruct.h"
 
 
-#define p0 206264.8062470963551564
+#define p_0 206264.8062470963551564
 
 namespace Geomagnetic {
 
@@ -79,7 +79,8 @@ const double a = 6378137.0;
         bool readDataFromFile(const std::string& filename, Datapoint& datapoints);
         bool readGridFromFile(const std::string& filename, Datapoint& datapoints);
         void DataSet(Datapoint& datapoiint, Datainfo& datainfo);
-        void selectRandomData(const Datapoint& allData, Datapoint& train, Datapoint& test);
+        void selectRandomData(const Datapoint& allData, Datapoint& data_sparse, int n=10);
+        void getDatarowcol(std::vector<double>X, std::vector<double>Y, std::vector<double>T, int& row, int& col,double step_x,double step_y);
         void selectLineData(const Datapoint& allData, Datapoint& train, Datapoint& test,int n);
         void selectLineData1(const Datapoint& allData, Datapoint& train, Datapoint& test,Datapoint& all);
         void selectLineData(const Datapoint& allData, Datapoint& train, int n);
@@ -88,7 +89,7 @@ const double a = 6378137.0;
         void DadiPoint2ProjectPoint(double B, double L,double &x,double &y);
         int ReadLines(QStringList FileList,QString savepath);
         int ReadLines_xyt(QStringList FileList,QString savepath);
-
+        bool createGridData(const Datapoint& datapoints, Datapoint& dataresult, double dx, double dy);
         Datapoint setDataResult(Datapoint& datapoint, double interval);
     public:
         int interval = 10;

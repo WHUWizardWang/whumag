@@ -4,6 +4,7 @@
 #include <QDate>
 #include <QFile>
 #include <QDebug>
+#include "omp.h"
 #include "database/databasemanager.h"
 #include "wmm/GeomagnetismHeader.h"
 #include "MagAno/OmgValidator.h"

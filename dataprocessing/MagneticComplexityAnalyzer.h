@@ -65,6 +65,7 @@ struct ComplexPoint
     double complexity;  // 复杂度
     double spacing;     // 测线间距
     double baseMag;     // 基础磁场值
+    int index;          // 可稀疏分类
 };
 // 评估结果结构
 struct ComplexityEvalResult {

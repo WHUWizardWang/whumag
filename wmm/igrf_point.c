@@ -289,6 +289,7 @@ int   shval3();
 int   dihf();
 int   safegets(char *buffer, int n);
 int getshc();
+int getshc_interp();
 
 int omg_igrf(MAGtype_CoordGeodetic *CoordGeodeticArr,
              MAGtype_Date *UserDateArr,
@@ -316,7 +317,8 @@ int omg_igrf(MAGtype_CoordGeodetic *CoordGeodeticArr,
     int   max1[MAXMOD];
     int   max2[MAXMOD];
     int   max3[MAXMOD];
-    int   nmax;
+    int   nmax_main;
+    int   nmax_sv;
     int   igdgc = 3;
     int   isyear = -1;
     int   ismonth = -1;
@@ -486,37 +488,36 @@ int omg_igrf(MAGtype_CoordGeodetic *CoordGeodeticArr,
 
         /** This will compute everything needed for 1 point in time. **/
 
-
         if (max2[modelI] == 0)
         {
-            getshc(mdfile, 1, irec_pos[modelI], max1[modelI], 1);
-            getshc(mdfile, 1, irec_pos[modelI + 1], max1[modelI + 1], 2);
-            nmax = interpsh(sdate, yrmin[modelI], max1[modelI],
+            getshc_interp(mdfile, 1, irec_pos[modelI], max1[modelI], 1);
+            getshc_interp(mdfile, 1, irec_pos[modelI + 1], max1[modelI + 1], 2);
+            nmax_main = interpsh(sdate, yrmin[modelI], max1[modelI],
                             yrmin[modelI + 1], max1[modelI + 1], 3);
-            nmax = interpsh(sdate + 1, yrmin[modelI], max1[modelI],
+            nmax_sv = interpsh(sdate + 1, yrmin[modelI], max1[modelI],
                             yrmin[modelI + 1], max1[modelI + 1], 4);
         }
         else
         {
             getshc(mdfile, 1, irec_pos[modelI], max1[modelI], 1);
             getshc(mdfile, 0, irec_pos[modelI], max2[modelI], 2);
-            nmax = extrapsh(sdate, epoch[modelI], max1[modelI], max2[modelI], 3);
-            nmax = extrapsh(sdate + 1, epoch[modelI], max1[modelI], max2[modelI], 4);
+            nmax_main = extrapsh(sdate, epoch[modelI], max1[modelI], max2[modelI], 3);
+            nmax_sv = extrapsh(sdate + 1, epoch[modelI], max1[modelI], max2[modelI], 4);
         }
 
-
-
         igdgc = 1;
+
         latitude = CoordGeodetic.phi;
         longitude = CoordGeodetic.lambda;
+
         alt = CoordGeodetic.HeightAboveEllipsoid;
-        printf("IGRF INPUT: Lat: %f, Lon: %f, Alt: %f, Date: %f\n", latitude, longitude, alt, sdate);
+//        printf("IGRF INPUT: Lat: %f, Lon: %f, Alt: %f, Date: %f\n", latitude, longitude, alt, sdate);
 
         /* Do the first calculations */
-        shval3(igdgc, latitude, longitude, alt, nmax, 3,
+        shval3(igdgc, latitude, longitude, alt, nmax_main, 3,
                IEXT, EXT_COEFF1, EXT_COEFF2, EXT_COEFF3);
         dihf(3);
-        shval3(igdgc, latitude, longitude, alt, nmax, 4,
+        shval3(igdgc, latitude, longitude, alt, nmax_sv, 4,
                IEXT, EXT_COEFF1, EXT_COEFF2, EXT_COEFF3);
         dihf(4);
 
@@ -2288,7 +2289,7 @@ int getshc(const char *file, int iflag, long int strec, int nmax_of_gh, int gh)
     int ii, m, n, mm, nn;
     int ios = 0;
     int line_num;
-    double g, hh;
+    double g, hh,g_dot=0.0, h_dot=0.0;
     double trash;
 
     if (file == NULL || file[0] == '\0') {
@@ -2308,7 +2309,7 @@ int getshc(const char *file, int iflag, long int strec, int nmax_of_gh, int gh)
     for (nn = 1; nn <= nmax_of_gh; ++nn) {
         for (mm = 0; mm <= nn; ++mm) {
             fgets(inbuff, MAXREAD, stream);
-            int parsed = sscanf(inbuff, "%d%d%lg%lg%lg%lg%s%d", &n, &m, &g, &hh, &trash, &trash, irat, &line_num);
+            int parsed = sscanf(inbuff, "%d%d%lg%lg%lg%lg%s%d", &n, &m, &g, &hh, &g_dot, &h_dot, irat, &line_num);
 
             if (parsed < 8) {
                 printf("Error: sscanf failed at line %d\n", nn);
@@ -2316,7 +2317,7 @@ int getshc(const char *file, int iflag, long int strec, int nmax_of_gh, int gh)
                 return -1;
             }
 
-            printf("Parsed line: n=%d, m=%d, nn=%d, mm=%d\n", n, m, nn, mm);
+//            printf("Parsed line: n=%d, m=%d, nn=%d, mm=%d\n", n, m, nn, mm);
 
             if ((nn != n) || (mm != m)) {
                 printf("Error: nn != n or mm != m at line %d\n", nn);
@@ -2329,7 +2330,7 @@ int getshc(const char *file, int iflag, long int strec, int nmax_of_gh, int gh)
             if (gh == 1) {
                 gh1[ii] = g;
             } else if (gh == 2) {
-                gh2[ii] = g;
+                gh2[ii] = g_dot;
             } else {
                 printf("\nError in subroutine getshc");
             }
@@ -2339,7 +2340,7 @@ int getshc(const char *file, int iflag, long int strec, int nmax_of_gh, int gh)
                 if (gh == 1) {
                     gh1[ii] = hh;
                 } else if (gh == 2) {
-                    gh2[ii] = hh;
+                    gh2[ii] = h_dot;
                 } else {
                     printf("\nError in subroutine getshc");
                 }
@@ -2348,7 +2349,7 @@ int getshc(const char *file, int iflag, long int strec, int nmax_of_gh, int gh)
     }
 
     fclose(stream);
-    printf("First coefficient: %f\n", gh1[1]);
+//    printf("First coefficient: %f\n", gh1[1]);
     return ios;
 }
 
@@ -2464,6 +2465,10 @@ int   gh;
             for ( ii = 1; ii <= k; ++ii)
             {
                 gha[ii] = gh1[ii] + factor * gh2[ii];
+                // 检查是否出现异常大的值
+                if (fabs(gha[ii]) > 100000.0) {
+                    printf("WARNING: Abnormally large coefficient gha[%d]=%.2f\n", ii, gha[ii]);
+                }
             }
             break;
         case 4:
@@ -3042,4 +3047,73 @@ int gh;
             break;
     }
     return (ios);
+}
+
+// 新增一个专门用于插值的 getshc 函数
+int getshc_interp(const char *file, int iflag, long int strec, int nmax_of_gh, int target_array)
+{
+    char inbuff[MAXINBUFF];
+    char irat[9];
+    int ii, m, n, mm, nn;
+    int ios = 0;
+    int line_num;
+    double g, hh, g_dot, h_dot;
+
+    if (file == NULL || file[0] == '\0') {
+        printf("Error: file path is NULL or empty!\n");
+        return -1;
+    }
+
+    FILE *stream = fopen(file, "rt");
+    if (stream == NULL) {
+        printf("\nError on opening file %s", file);
+        return -1;
+    }
+
+    ii = 0;
+    fseek(stream, strec, SEEK_SET);
+
+    for (nn = 1; nn <= nmax_of_gh; ++nn) {
+        for (mm = 0; mm <= nn; ++mm) {
+            fgets(inbuff, MAXREAD, stream);
+            int parsed = sscanf(inbuff, "%d%d%lg%lg%lg%lg%s%d",
+                                &n, &m, &g, &hh, &g_dot, &h_dot, irat, &line_num);
+
+            if (parsed < 6) {
+                printf("Error: sscanf failed at line %d, parsed=%d\n", nn, parsed);
+                fclose(stream);
+                return -1;
+            }
+
+            if ((nn != n) || (mm != m)) {
+                printf("Error: nn != n or mm != m at line %d\n", nn);
+                ios = -2;
+                fclose(stream);
+                return ios;
+            }
+
+            ii = ii + 1;
+            if (target_array == 1) {
+                gh1[ii] = g;        // 存储主磁场 g 系数到 gh1
+            } else if (target_array == 2) {
+                gh2[ii] = g;        // 存储主磁场 g 系数到 gh2（用于插值）
+            } else {
+                printf("\nError in subroutine getshc_interp");
+            }
+
+            if (m != 0) {
+                ii = ii + 1;
+                if (target_array == 1) {
+                    gh1[ii] = hh;   // 存储主磁场 h 系数到 gh1
+                } else if (target_array == 2) {
+                    gh2[ii] = hh;   // 存储主磁场 h 系数到 gh2（用于插值）
+                } else {
+                    printf("\nError in subroutine getshc_interp");
+                }
+            }
+        }
+    }
+
+    fclose(stream);
+    return ios;
 }

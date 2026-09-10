@@ -6,6 +6,7 @@ mappolyhedralform::mappolyhedralform(QWidget *parent) :
     ui(new Ui::mappolyhedralform)
 {
     ui->setupUi(this);
+    ui->radioButton->setChecked(true);
 }
 
 mappolyhedralform::~mappolyhedralform()

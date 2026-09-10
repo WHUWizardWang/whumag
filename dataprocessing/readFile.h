@@ -15,10 +15,10 @@ class readFile
 public:
 	readFile();
 	~readFile();
-    void read_file(std::vector<double>& X, std::vector<double>& Y, std::vector<double>& T, std::string infile);//¶ÁÈë×ø±êĞÅÏ¢ºÍ´ÅÒì³£ÖµÒÔ¼°¸ñÍøĞĞÁĞĞÅÏ¢
-	void setValue_d(double& a, double b);//double±äÁ¿¸³Öµ
-	void setValue_i(int& a, int b);//int±äÁ¿¸³Öµ
-    void readfile_run(std::string infile);//Íê³ÉÑÓÍØÇ°ËùÓĞ×¼±¸¹¤×÷
+    void read_file(std::vector<double>& X, std::vector<double>& Y, std::vector<double>& T, std::string infile);//è¯»å…¥åæ ‡ä¿¡æ¯å’Œç£å¼‚å¸¸å€¼ä»¥åŠæ ¼ç½‘è¡Œåˆ—ä¿¡æ¯
+	void setValue_d(double& a, double b);//doubleå˜é‡èµ‹å€¼
+	void setValue_i(int& a, int b);//intå˜é‡èµ‹å€¼
+    void readfile_run(std::string infile);//å®Œæˆå»¶æ‹“å‰æ‰€æœ‰å‡†å¤‡å·¥ä½œ
     void cal_grid(double x_step,double y_step);
 
     std::ifstream fin;

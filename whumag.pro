@@ -1,4 +1,4 @@
-QT       += core gui quickwidgets location positioning sql printsupport network quick qml
+QT       += core gui quickwidgets location positioning sql printsupport network quick qml concurrent
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets printsupport
 
@@ -30,6 +30,22 @@ SOURCES += \
     Map/omgqmlpolygon.cpp \
     Map/omgraster.cpp \
     ReadData.cpp \
+    alglib/alglibinternal.cpp \
+    alglib/alglibmisc.cpp \
+    alglib/ap.cpp \
+    alglib/dataanalysis.cpp \
+    alglib/diffequations.cpp \
+    alglib/fasttransforms.cpp \
+    alglib/integration.cpp \
+    alglib/interpolation.cpp \
+    alglib/kernels_avx2.cpp \
+    alglib/kernels_fma.cpp \
+    alglib/kernels_sse2.cpp \
+    alglib/linalg.cpp \
+    alglib/optimization.cpp \
+    alglib/solvers.cpp \
+    alglib/specialfunctions.cpp \
+    alglib/statistics.cpp \
     buildprojectform.cpp \
     contourplotter.cpp \
     database/database.cpp \
@@ -101,6 +117,23 @@ HEADERS += \
     Map/omgqmlpolygon.h \
     Map/omgraster.h \
     ReadData.h \
+    alglib/alglibinternal.h \
+    alglib/alglibmisc.h \
+    alglib/ap.h \
+    alglib/dataanalysis.h \
+    alglib/diffequations.h \
+    alglib/fasttransforms.h \
+    alglib/integration.h \
+    alglib/interpolation.h \
+    alglib/kernels_avx2.h \
+    alglib/kernels_fma.h \
+    alglib/kernels_sse2.h \
+    alglib/linalg.h \
+    alglib/optimization.h \
+    alglib/solvers.h \
+    alglib/specialfunctions.h \
+    alglib/statistics.h \
+    alglib/stdafx.h \
     buildprojectform.h \
     contourplotter.h \
     database/database.h \
@@ -123,6 +156,7 @@ HEADERS += \
     importform.h \
     mainwindow.h \
     myopenglwidget.h \
+    nanoflann.hpp \
     navigation/autonav.h \
     navigation/function.h \
     navigation/iccp.h \
@@ -134,6 +168,7 @@ HEADERS += \
     realtime_redirector.h \
     referencemap/CompressiveSensing.h \
     referencemap/GeomagneticModel.h \
+    referencemap/KDTree.h \
     referencemap/LSSVMPSO.h \
     referencemap/ReconstructionManager.h \
     referencemap/globalmodel/autoreferencemap.h \
@@ -193,9 +228,7 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 !isEmpty(target.path): INSTALLS += target
 
 DISTFILES += \
-    cs.py \
     high_quality/high_quality.rcc \
-    plot.py \
     wmm/COF/EMM2000.COF \
     wmm/COF/EMM2000SV.COF \
     wmm/COF/EMM2001.COF \
@@ -247,6 +280,8 @@ CONFIG += openssl-linked  # 静态链接 OpenSSL
 #                /usr/local/fftw_arm/lib
 
 LIBS += -L$$PWD/ -llibfftw3-3
+QMAKE_CXXFLAGS += -fopenmp
+QMAKE_LFLAGS  += -fopenmp
 # QMAKE_CXXFLAGS_RELEASE = $$QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO
 # QMAKE_LFLAGS_RELEASE = $$QMAKE_LFLAGS_RELEASE_WITH_DEBUGINFO
 QMAKE_CXXFLAGS += -Os

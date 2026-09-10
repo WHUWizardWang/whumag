@@ -41,6 +41,8 @@ private slots:
     void on_pushButton_clicked();                               // 点击处理按钮，进行建模
     void on_radioButtonGroup_toggled(int id);
 
+    void on_pushButton_2_clicked();
+
 private:
     Ui::ReferenceMap *ui;
     maptaylorlegendreform *taylorlegendre_form_;      // 参数界面:taylor和legendre

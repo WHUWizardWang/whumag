@@ -88,3 +88,4 @@ void MapForm::loadJson(const QString &file_path){
     jsonValue = jsonObject.value("geometry");
     jsonObject = jsonValue.toVariant().toJsonObject();
 }
+

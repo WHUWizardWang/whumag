@@ -4,12 +4,36 @@ OmgQmlPolygon::OmgQmlPolygon(QObject *parent)
 {
     m_raster_emag2.setResImgPath(g_image_path);
     m_raster_mamea.setResImgPath(g_image_path);
+    qDebug() << "=== 数据加载调试 ===";
+    qDebug() << "EMAG2 数据路径:" << g_emag2_path;
+    qDebug() << "MAMEA 数据路径:" << g_mamea_path;
+    qDebug() << "图像输出路径:" << g_image_path;
 
-    m_raster_emag2.loadFromImage(g_emag2_path);
-    m_raster_mamea.loadFromPoints(g_mamea_path);
+    // 检查文件是否存在
+    if (!QFile::exists(g_emag2_path)) {
+        qWarning() << "❌ EMAG2 数据文件不存在!";
+    } else {
+        qDebug() << "✅ EMAG2 数据文件存在";
+    }
+
+    if (!QFile::exists(g_mamea_path)) {
+        qWarning() << "❌ MAMEA 数据文件不存在!";
+    } else {
+        qDebug() << "✅ MAMEA 数据文件存在";
+    }
+
+    bool emag2_loaded = m_raster_emag2.loadFromImage(g_emag2_path);
+    bool mamea_loaded = m_raster_mamea.loadFromPoints(g_mamea_path);
+
+    qDebug() << "EMAG2 加载结果:" << (emag2_loaded ? "成功" : "失败");
+    qDebug() << "MAMEA 加载结果:" << (mamea_loaded ? "成功" : "失败");
 
     m_lat_rsl = m_raster_emag2.latResolution();
     m_lon_rsl = m_raster_emag2.lonResolution();
+
+    qDebug() << "纬度分辨率:" << m_lat_rsl;
+    qDebug() << "经度分辨率:" << m_lon_rsl;
+    qDebug() << "=== 数据加载调试结束 ===";
 }
 
 OmgQmlPolygon::OmgQmlPolygon(const OmgQmlPolygon &polygon)
@@ -112,7 +136,21 @@ int OmgQmlPolygon::pointCount()
 void OmgQmlPolygon::getInertnalPoints(int flag)
 {
 
+    qDebug() << "=== getInertnalPoints 开始调试 ===";
+    qDebug() << "Flag:" << flag << (flag == 0 ? "(EMAG2)" : "(MAMEA)");
+    qDebug() << "输入多边形点数:" << m_polygon.size();
+
+    // 打印所有多边形顶点
+    for (int i = 0; i < m_polygon.size(); ++i) {
+        qDebug() << "点" << i << ": 经度=" << m_polygon[i].x << ", 纬度=" << m_polygon[i].y;
+    }
+
     calibrateLon(m_polygon);
+
+    qDebug() << "经度校准后的多边形:";
+    for (int i = 0; i < m_polygon.size(); ++i) {
+        qDebug() << "校准后点" << i << ": 经度=" << m_polygon[i].x << ", 纬度=" << m_polygon[i].y;
+    }
     //
     double minX = 9999.9999;
     double maxX = -9999.9999;
@@ -126,6 +164,11 @@ void OmgQmlPolygon::getInertnalPoints(int flag)
         maxY = qMax(maxY, iter->y);
     }
 
+    qDebug() << "计算的边界:";
+    qDebug() << "经度范围:" << minX << "到" << maxX;
+    qDebug() << "纬度范围:" << minY << "到" << maxY;
+    qDebug() << "Radio:" << m_radio;
+
     // x is lon, y is lat.
     m_max_lat = maxY;
     m_min_lon = minX;
@@ -138,14 +181,39 @@ void OmgQmlPolygon::getInertnalPoints(int flag)
     switch (flag)
     {
         case 0: // emag2
+            qDebug() << "开始获取 EMAG2 内部点...";
             geoPnts = m_raster_emag2.getInternalPoints(m_polygon, m_radio);
+            qDebug() << "EMAG2 获取到" << geoPnts.size() << "个点";
             break;
         case 1: // mamea
+            qDebug() << "开始获取 MAMEA 内部点...";
             geoPnts = m_raster_mamea.getInternalPoints(m_polygon, m_radio);
+            qDebug() << "MAMEA 获取到" << geoPnts.size() << "个点";
             break;
         default:
-            ;
+            qWarning() << "❌ 不支持的 flag:" << flag;
+            return;
     }
+
+
+    if (geoPnts.isEmpty()) {
+        qWarning() << "❌ 没有获取到任何有效数据点！";
+        qWarning() << "可能原因：";
+        qWarning() << "1. 选择区域超出数据范围";
+        qWarning() << "2. 数据文件损坏或格式错误";
+        qWarning() << "3. 多边形区域太小";
+        return;
+    }
+    // 检查前几个点的数据
+    qDebug() << "前5个数据点:";
+    for (int i = 0; i < qMin(5, geoPnts.size()); ++i) {
+        qDebug() << "点" << i << ": lat=" << geoPnts[i].lat()
+                 << ", lon=" << geoPnts[i].lon()
+                 << ", R=" << geoPnts[i].red()
+                 << ", G=" << geoPnts[i].green()
+                 << ", B=" << geoPnts[i].blue();
+    }
+
 
     m_pnts = geoPnts;
     m_points.clear();

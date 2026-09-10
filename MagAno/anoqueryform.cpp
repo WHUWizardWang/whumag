@@ -136,9 +136,9 @@ void AnoQueryForm::on_pushButton_3_clicked()
             draw_Form *draw_form_ = new draw_Form;
             QVector<double> xx,yy,zz;
             draw_form_->create_xyz_p(ano_pnts,xx,yy,zz);
-            draw_form_->set_heatMapView(xx,yy,zz);
-            draw_form_->create_contour_txt(ano_pnts);
-            draw_form_->set_ContourView("temp_qt2python.txt");
+            draw_form_->autoset_heatMapView(xx,yy,zz);
+//          draw_form_->create_contour_txt(ano_pnts);
+            draw_form_->autoset_contourView(xx,yy,zz);
             draw_form_->show();}
         }
         else if (ui->comboBox_error->currentText() == "MAMEA")
@@ -148,9 +148,9 @@ void AnoQueryForm::on_pushButton_3_clicked()
             draw_Form *draw_form_ = new draw_Form;
             QVector<double> xx,yy,zz;
             draw_form_->create_xyz_p(ano_pnts,xx,yy,zz);
-            draw_form_->set_heatMapView(xx,yy,zz);
-            draw_form_->create_contour_txt(ano_pnts);
-            draw_form_->set_ContourView("temp_qt2python.txt");
+            draw_form_->autoset_heatMapView(xx,yy,zz);
+//            draw_form_->create_contour_txt(ano_pnts);
+            draw_form_->autoset_contourView(xx,yy,zz);
             draw_form_->show();
             }
         }

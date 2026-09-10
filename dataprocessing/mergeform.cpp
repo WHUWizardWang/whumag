@@ -109,7 +109,7 @@ void mergeForm::on_confirm_clicked()
     QCoreApplication::processEvents();
     myMerge.rongHe_run2(window_size1,window_size2,min_B,min_L,max_B,max_L,Bint,Lint);
     emit textUpdated("数据融合处理完毕!");
-    myMerge.outResult(filepath+"/Processed/"+filename);
+    myMerge.outResult(filename);
     emit textUpdated("结果输出至本地完毕!");
     QCoreApplication::processEvents();
     emit textUpdated("绘制图像准备中...");
@@ -126,8 +126,8 @@ void mergeForm::on_confirm_clicked()
         draw_Form *draw_form_1 = new draw_Form;
         QVector<double> xx1,yy1,zz1;
         draw_form_1->create_xyz_f(file_i,xx1,yy1,zz1);
-        draw_form_1->set_heatMapView(xx1,yy1,zz1);
-        draw_form_1->set_ContourView(file_i);
+        draw_form_1->autoset_heatMapView(xx1,yy1,zz1);
+        draw_form_1->autoset_contourView(xx1,yy1,zz1);
         layout1->addWidget(draw_form_1);
         tab1 ->setLayout(layout1);
         QString str;
@@ -144,9 +144,9 @@ void mergeForm::on_confirm_clicked()
     QVBoxLayout *layout3 = new QVBoxLayout();
     draw_Form *draw_form_3 = new draw_Form;
     QVector<double> xx3,yy3,zz3;
-    draw_form_3->create_xyz_f(filepath+"/Processed/"+filename,xx3,yy3,zz3);
-    draw_form_3->set_heatMapView(xx3,yy3,zz3);
-    draw_form_3->set_ContourView(filepath+"/Processed/"+filename);
+    draw_form_3->create_xyz_f(filename,xx3,yy3,zz3);
+    draw_form_3->autoset_heatMapView(xx3,yy3,zz3);
+    draw_form_3->autoset_contourView(xx3,yy3,zz3);
     layout3->addWidget(draw_form_3);
     tab3 ->setLayout(layout3);
     //
@@ -258,3 +258,12 @@ void mergeForm::on_confirm_clicked()
 //    // 更新主界面的树
 //    emit treeUpdated(1);
 //}
+
+void mergeForm::on_pushButton_clicked()
+{
+    // 选择背景文件
+    QString tmp = QFileDialog::getSaveFileName(this, tr("请选择保存文件"),
+                                               QCoreApplication::applicationFilePath(),"*.*");
+    ui->lineEdit->setText(tmp);
+}
+

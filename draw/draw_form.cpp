@@ -9,6 +9,11 @@ draw_Form::draw_Form(QWidget *parent) :
     ui->tabWidget->setTabText(0,"热力图");
     ui->tabWidget->setTabText(1,"等值线图");
 }
+void draw_Form::setMapStep(double dx,double dy)
+{
+    x_step = dx;
+    y_step = dy;
+}
 
 draw_Form::~draw_Form()
 {
@@ -123,6 +128,7 @@ void draw_Form::create_xyz_f(QString filename,QVector<double> &xx,QVector<double
         }
     }
     file.close();
+
 }
 
 void draw_Form::set_HeatOrSactterView(QVector<double> xx,QVector<double> yy,QVector<double> result)
@@ -274,7 +280,7 @@ void draw_Form::set_HeatOrSactterView(QVector<double> xx,QVector<double> yy,QVec
 
 void draw_Form::set_heatMapView(QVector<double> xx,QVector<double> yy,QVector<double> result)
 {
-    //
+    // 清除之前的图形
     QLayout *layout = ui->tab_heatmap->layout();
     if (layout)
     {
@@ -286,23 +292,25 @@ void draw_Form::set_heatMapView(QVector<double> xx,QVector<double> yy,QVector<do
         QList<QWidget*> children = ui->tab_heatmap->findChildren<QWidget*>();
         qDeleteAll(children); // 使用qDeleteAll自动删除QList中的每个QWidget指针
     }
+    // 确定数据范围
+    double minX = *std::min_element(xx.begin(), xx.end());
+    double maxX = *std::max_element(xx.begin(), xx.end());
+    double minY = *std::min_element(yy.begin(), yy.end());
+    double maxY = *std::max_element(yy.begin(), yy.end());
+    double minZ = *std::min_element(result.begin(), result.end());
+    double maxZ = *std::max_element(result.begin(), result.end());
+
     // 确定网格尺寸
-    int nx = 0;
-    int ny = 0;
-    // 找到第一个Y值改变的位置，这就是nx
-    for (size_t i = 1; i < yy.size(); ++i) {
-        if (std::abs(yy[i] - yy[0]) > 1e-3) {  // 使用小数值比较
-            nx = i;
-            break;
-        }
-    }
-    // 计算ny
-    if (nx > 0) {
-        ny = result.size() / nx;
-    } else {
+    // 使用类内定义的格网分辨率计算nx和ny
+    int nx = qRound((maxX - minX) / x_step) + 1;
+    int ny = qRound((maxY - minY) / y_step) + 1;
+
+    // 验证计算结果
+    if (nx <= 0 || ny <= 0) {
         qDebug() << "Error: Could not determine grid dimensions";
         return;
     }
+
     int cols = nx;
     int rows = ny;
     if (rows*cols != result.size())
@@ -311,13 +319,7 @@ void draw_Form::set_heatMapView(QVector<double> xx,QVector<double> yy,QVector<do
         magWarn = false;
         return;
     }
-    //
-    double minX = *std::min_element(xx.begin(), xx.end());
-    double maxX = *std::max_element(xx.begin(), xx.end());
-    double minY = *std::min_element(yy.begin(), yy.end());
-    double maxY = *std::max_element(yy.begin(), yy.end());
-    double minZ = *std::min_element(result.begin(), result.end());
-    double maxZ = *std::max_element(result.begin(), result.end());
+    // 创建QCustomPlot对象
     QCustomPlot *customPlot = new QCustomPlot();
     QCPColorMap *heatmap = new QCPColorMap(customPlot->xAxis, customPlot->yAxis);
     heatmap->data()->setSize(cols, rows);
@@ -341,8 +343,8 @@ void draw_Form::set_heatMapView(QVector<double> xx,QVector<double> yy,QVector<do
     colorScale->setDataRange(QCPRange(minZ,maxZ));
     colorScale->setGradient(QCPColorGradient::gpJet);
     // 设置轴标签
-    customPlot->xAxis->setLabel("X /km");
-    customPlot->yAxis->setLabel("Y /km");
+    customPlot->xAxis->setLabel("经度");
+    customPlot->yAxis->setLabel("纬度");
     // 绘图窗口设置
     customPlot->rescaleAxes();
     customPlot->replot();
@@ -385,6 +387,7 @@ void draw_Form::set_ContourView(QString filename)
             qDebug() << "Failed to load data file";
         }
         // 绘制等值线图
+        plotter->setStep(x_step,y_step);
         plotter->plotContour();
         QVBoxLayout *layout1 = new QVBoxLayout(ui->tab_counter);
         layout1->addWidget(plotter);
@@ -514,14 +517,15 @@ void draw_Form::autoset_heatMapView(QVector<double> xx, QVector<double> yy, QVec
     colorScale->axis()->setLabel("数值范围");
 
     // 设置轴标签
-    customPlot->xAxis->setLabel("X /km");
-    customPlot->yAxis->setLabel("Y /km");
+    customPlot->xAxis->setLabel("经度 °");
+    customPlot->yAxis->setLabel("纬度 °");
 
     // 添加标题
     customPlot->plotLayout()->insertRow(0);
     QCPTextElement *title = new QCPTextElement(customPlot);
-    title->setText(QString("热图 (原始数据: %1 点，降采样: %2 x %3)")
-                       .arg(result.size()).arg(rows).arg(cols));
+    // title->setText(QString("热力图 (原始数据: %1 点，降采样: %2 x %3)")
+    //                    .arg(result.size()).arg(rows).arg(cols));
+    title->setText("热力图");
     title->setFont(QFont("sans", 10, QFont::Bold));
     customPlot->plotLayout()->addElement(0, 0, title);
 
@@ -556,4 +560,38 @@ int draw_Form::findClosestIndex(const QList<double>& sortedValues, double target
         double diff2 = target - *(it - 1);
         return (diff1 < diff2) ? index : index - 1;
     }
+}
+
+void draw_Form::autoset_contourView(QVector<double> xx,QVector<double> yy,QVector<double> result)
+{
+    QLayout *oldlayout = ui->tab_counter->layout();
+    if (oldlayout)
+    {
+        delete oldlayout;
+        ui->tab_counter->setLayout(nullptr);
+    }
+    else
+    {
+        QList<QWidget*> children = ui->tab_counter->findChildren<QWidget*>();
+        qDeleteAll(children); // 使用qDeleteAll自动删除QList中的每个QWidget指针
+    }
+    ContourPlotter *contour = new ContourPlotter;
+    contour->setData(std::vector<double>(xx.begin(), xx.end()),
+                     std::vector<double>(yy.begin(), yy.end()),
+                     std::vector<double>(result.begin(), result.end()));
+    contour->autoDetectStep();
+    if (std::abs(x_step) < 1e-10 || std::abs(y_step) < 1e-10) {
+        double xmin = *std::min_element(xx.begin(), xx.end());
+        double xmax = *std::max_element(xx.begin(), xx.end());
+        double ymin = *std::min_element(yy.begin(), yy.end());
+        double ymax = *std::max_element(yy.begin(), yy.end());
+        x_step = (xmax - xmin) / 100.0;
+        y_step = (ymax - ymin) / 100.0;
+    }
+    // 绘制等值线图
+    contour->autoplotContour();
+    QVBoxLayout *layout1 = new QVBoxLayout(ui->tab_counter);
+    layout1->addWidget(contour);
+
+
 }

@@ -1,5 +1,10 @@
 ﻿#include "accuracy.h"
-#include "dataprocessing/MagneticComplexityAnalyzer.h"
+#include "MagneticComplexityAnalyzer.h"
+
+Accuracy::Accuracy(QObject *parent)
+    : QObject(parent)
+{
+}
 
 //读文件
 void Accuracy::readData(const QString& filename,Geomagnetic::Datapoint& dataPoints) {
@@ -68,10 +73,10 @@ void Accuracy::readData(const QString& filename,Geomagnetic::Datapoint& dataPoin
     if (bestScore == 0) {
         std::cerr << "Warning: Could not determine delimiter, defaulting to comma." << std::endl;
     } else {
-        std::cout << "Using delimiter: " << (bestDelimiter == '\t' ? "TAB" :
-                                                 bestDelimiter == ' ' ? "SPACE" :
-                                                 QString(bestDelimiter).toStdString())
-                  << std::endl;
+        // std::cout << "Using delimiter: " << (bestDelimiter == '\t' ? "TAB" :
+        //                                          bestDelimiter == ' ' ? "SPACE" :
+        //                                          QString(bestDelimiter).toStdString())
+        //           << std::endl;
     }
 
     // 重置文件指针到开始位置
@@ -91,19 +96,30 @@ void Accuracy::readData(const QString& filename,Geomagnetic::Datapoint& dataPoin
             fields = line.split(bestDelimiter, Qt::SkipEmptyParts);
         }
 
-        if (fields.size() < 3) {
-            std::cerr << "Error: Not enough fields in line: " << line.toStdString() << std::endl;
+        // 如果字段数为 3 或 4，才继续，否则报错并跳过
+        if (fields.size() < 3 || fields.size() > 4) {
+            std::cerr << "Error: Wrong number of fields in line: " << line.toStdString() << std::endl;
             continue;
         }
 
-        bool ok1 = false, ok2 = false, ok3 = false;
+        // 公共的三列解析：lon, lat, mag
+        bool ok1 = false, ok2 = false, ok3 = false, ok4 = false;
         double lon = fields[0].toDouble(&ok1);
         double lat = fields[1].toDouble(&ok2);
         double mag = fields[2].toDouble(&ok3);
-
         if (!ok1 || !ok2 || !ok3) {
             std::cerr << "Error: Invalid numeric data in line: " << line.toStdString() << std::endl;
             continue;
+        }
+
+        int keyIndex; // 默认用自增索引
+        if (fields.size() == 4) {
+            // 如果是四列，就把第四列当成插入的索引
+            keyIndex = fields[3].toInt(&ok4);
+            if (!ok4) {
+                std::cerr << "Error: Invalid index in fourth field: " << line.toStdString() << std::endl;
+                continue;
+            }
         }
 
         Geomagnetic::SinglePoint datapoint;
@@ -112,12 +128,13 @@ void Accuracy::readData(const QString& filename,Geomagnetic::Datapoint& dataPoin
         datapoint.lon = lon;
         datapoint.lat = lat;
         datapoint.tMagnetic = mag;
+        datapoint.index = keyIndex; // 使用第四列作为索引（如果存在）
 
         // 将datapoint数据插入到dataPoints中
         dataPoints.insert(std::make_pair(index++, datapoint));
     }
 
-    std::cout << "Successfully read " << index << " data points." << std::endl;
+    std::cout << "成功加载 " << index << " 个数据点。" << std::endl;
     file.close();
 }
 
@@ -503,6 +520,7 @@ double Accuracy::calculateRMSE(const std::vector<double>& v1, const std::vector<
 
     return std::sqrt(sum_squared_diff / v1.size());
 }
+
 Geomagnetic::Datapoint Accuracy::filterGeoMagneticData(
     const Geomagnetic::Datapoint& inputData,
     double minLon, double maxLon,
@@ -517,6 +535,7 @@ Geomagnetic::Datapoint Accuracy::filterGeoMagneticData(
     }
     return filteredData;
 }
+
 void Accuracy::dataResult(const Geomagnetic::Datapoint& dataPoints, QString filename)
 {
     QFile file(filename);
@@ -525,8 +544,26 @@ void Accuracy::dataResult(const Geomagnetic::Datapoint& dataPoints, QString file
         return;
     }
     QTextStream out(&file);
+    out.setRealNumberNotation(QTextStream::FixedNotation);
+    out.setRealNumberPrecision(6);
     for (const auto& pair : dataPoints) {
         out << pair.second.X << "," << pair.second.Y << "," << pair.second.tMagnetic << Qt::endl;
+    }
+    file.close();
+}
+
+void Accuracy::dataResult_for_autoreferencemap(const Geomagnetic::Datapoint& dataPoints, int height, QString filename)
+{
+    QFile file(filename);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        std::cerr << "Failed to open file: " << filename.toStdString() << std::endl;
+        return;
+    }
+    QTextStream out(&file);
+    out.setRealNumberNotation(QTextStream::FixedNotation);
+    out.setRealNumberPrecision(6);
+    for (const auto& pair : dataPoints) {
+        out << pair.second.X << "," << pair.second.Y << "," << height << "," << pair.second.tMagnetic << Qt::endl;
     }
     file.close();
 }
@@ -911,5 +948,462 @@ double Accuracy::computeCheckLineAccuracy(const QString& backgroundDataFile,
     } catch (...) {
         std::cerr << "发生未知异常!" << std::endl;
         return -999.0;
+    }
+}
+
+// double Accuracy::computeSparseCheckLineRMSE(const QStringList& checkLineDataFile,
+//                                                    const QString& complexityDataFile,
+//                                                    double searchRadius)
+// {
+//     // 背景场数据
+//     Geomagnetic::Datapoint dataPoints1;
+//     readData(complexityDataFile, dataPoints1);
+//     if (dataPoints1.empty()) {
+//         std::cerr << "Failed to read background data file." << std::endl;
+//         return -1;
+//     }
+
+//     // 计算背景场测区范围和格网间距
+//     std::vector<double> lons, lats;
+//     for (const auto& pair : dataPoints1) {
+//         lons.push_back(pair.second.X);  // 经度
+//         lats.push_back(pair.second.Y);  // 纬度
+//     }
+
+//     // 计算测区范围
+//     double min_lon = *std::min_element(lons.begin(), lons.end());
+//     double max_lon = *std::max_element(lons.begin(), lons.end());
+//     double min_lat = *std::min_element(lats.begin(), lats.end());
+//     double max_lat = *std::max_element(lats.begin(), lats.end());
+
+//     // 计算平面距离范围
+//     double center_lat = (min_lat + max_lat) / 2.0;
+//     double lon_range_m = max_lon - min_lon;
+//     double lat_range_m = max_lat - min_lat;
+
+//     // 计算格网间距（假设为规则格网）
+//     std::set<double> unique_lons(lons.begin(), lons.end());
+//     std::set<double> unique_lats(lats.begin(), lats.end());
+
+//     double lon_spacing = 0.0;
+//     double lat_spacing = 0.0;
+
+//     if (unique_lons.size() > 1) {
+//         auto it = unique_lons.begin();
+//         double prev_lon = *it++;
+//         std::vector<double> lon_diffs;
+//         while (it != unique_lons.end()) {
+//             lon_diffs.push_back(*it - prev_lon);
+//             prev_lon = *it++;
+//         }
+//         lon_spacing = *std::min_element(lon_diffs.begin(), lon_diffs.end());
+//     }
+
+//     if (unique_lats.size() > 1) {
+//         auto it = unique_lats.begin();
+//         double prev_lat = *it++;
+//         std::vector<double> lat_diffs;
+//         while (it != unique_lats.end()) {
+//             lat_diffs.push_back(*it - prev_lat);
+//             prev_lat = *it++;
+//         }
+//         lat_spacing = *std::min_element(lat_diffs.begin(), lat_diffs.end());
+//     }
+
+//     // 转换为平面距离
+//     double lon_spacing_m = lon_spacing * 111319 * std::cos(center_lat * M_PI / 180.0);
+//     double lat_spacing_m = lat_spacing * 111319;
+
+//     // 用于加权RMSE
+//     double sum_weighted_sq_rmse = 0.0;
+//     int total_points = 0;
+//     int i = 0;
+//     // 统计每条线的RMSE与点数
+//     for (const QString& filepath : checkLineDataFile) {
+//         Geomagnetic::Datapoint checkLineData;
+//         readData(filepath, checkLineData); // 读取单条检核线
+//         if (checkLineData.empty()) {
+//             std::cerr << "Failed to read checkline data file: " << filepath.toStdString() << std::endl;
+//             continue;
+//         }
+//         checkLineData = filterGeoMagneticData(checkLineData);
+
+//         // 提取背景场数据
+//         std::vector<double> sfq_all_x, sfq_all_y, sfq_all_z;
+//         for (const auto& pair : dataPoints1) {
+//             sfq_all_x.push_back(pair.second.X);
+//             sfq_all_y.push_back(pair.second.Y);
+//             sfq_all_z.push_back(pair.second.tMagnetic);
+//         }
+
+//         // 提取检核线点
+//         std::vector<double> line_data_x, line_data_y, line_data_mag;
+//         for (const auto& pair : checkLineData) {
+//             line_data_x.push_back(pair.second.X);
+//             line_data_y.push_back(pair.second.Y);
+//             line_data_mag.push_back(pair.second.tMagnetic);
+//         }
+
+//         int n_points = line_data_x.size();
+//         if (n_points == 0) continue;
+
+//         // 插值
+//         Geomagnetic::OptimizedCubicInterpolator cubicInterpolator;
+//         std::vector<double> extract_data_mag = cubicInterpolator.cubic_interpolate(
+//             sfq_all_x, sfq_all_y, sfq_all_z,
+//             line_data_x, line_data_y
+//             );
+
+//         // 检查长度
+//         if (extract_data_mag.size() != line_data_mag.size()) {
+//             std::cerr << "Data length mismatch for file: " << filepath.toStdString() << std::endl;
+//             continue;
+//         }
+
+//         // 原始RMSE
+//         double sum_squared_diff = 0.0;
+//         for (size_t i = 0; i < line_data_mag.size(); ++i) {
+//             double diff = line_data_mag[i] - extract_data_mag[i];
+//             sum_squared_diff += diff * diff;
+//         }
+//         double rmse_o = std::sqrt(sum_squared_diff / line_data_mag.size());
+// //        std::cout << "[文件 " << filepath.toStdString() << "] 原始RMSE: " << rmse_o << " nT" << std::endl;
+
+//         // 移动平均提取趋势
+//         int windowSize = 140 * 8;
+//         std::vector<double> trend_extract_data = movingAverage(extract_data_mag, windowSize);
+//         std::vector<double> trend_line_data = movingAverage(line_data_mag, windowSize);
+
+//         // 趋势线对齐和RMSE
+//         double rmse_trend_o, removeLength;
+//         std::vector<double> modified_trend;
+//         std::tie(rmse_trend_o, modified_trend, removeLength) = removeTrendLine(trend_extract_data, trend_line_data);
+
+// //        std::cout << "[文件 " << filepath.toStdString() << "] RMSE: " << rmse_trend_o << " nT" << std::endl;
+// //        std::cout << "[文件 " << filepath.toStdString() << "] 最佳垂直偏移量: " << removeLength << " nT" << std::endl;
+
+//         // 加权统计
+//         sum_weighted_sq_rmse += rmse_trend_o * rmse_trend_o * n_points;
+//         total_points += n_points;
+//         emit progressUpdated(i + 1, checkLineDataFile.size());
+//         i++;
+
+//     }
+
+//     if (total_points == 0) {
+//         std::cerr << "No valid checkline data found." << std::endl;
+//         return -1;
+//     }
+
+//     // 显示背景场测区信息
+//     std::cout << "========== 背景场测区信息 ==========" << std::endl;
+//     std::cout << "经度范围: " << std::fixed << std::setprecision(6)
+//               << min_lon << "° ~ " << max_lon << "° (跨度: "
+//               << std::setprecision(6) << lon_range_m << " m)" << std::endl;
+//     std::cout << "纬度范围: " << std::fixed << std::setprecision(6)
+//               << min_lat << "° ~ " << max_lat << "° (跨度: "
+//               << std::setprecision(6) << lat_range_m << " m)" << std::endl;
+//     std::cout << "格网间距: 经向 " << std::fixed << std::setprecision(1)
+//               << lon_spacing_m - 1 << " m, 纬向 " << lat_spacing_m - 1 << " m" << std::endl;
+//     std::cout << "背景场数据点数: " << dataPoints1.size() << " 个" << std::endl;
+//     std::cout << "====================================" << std::endl;
+
+//     double overall_rmse = std::sqrt(sum_weighted_sq_rmse / total_points);
+//     std::cout << "所有检核线总RMSE: " << overall_rmse << " nT" << std::endl;
+//     return overall_rmse;
+// }
+double Accuracy::computeSparseCheckLineRMSE(const QStringList& checkLineDataFile,
+                                            const QString& complexityDataFile,
+                                            double searchRadius)
+{
+    try {
+        // 背景场数据
+        Geomagnetic::Datapoint dataPoints1;
+        readData(complexityDataFile, dataPoints1);
+        if (dataPoints1.empty()) {
+            std::cerr << "Failed to read background data file." << std::endl;
+            return -1;
+        }
+
+        // 分离可稀疏和不可稀疏区域的背景场数据
+        Geomagnetic::Datapoint sparsableDataPoints;  // index=1的点
+        Geomagnetic::Datapoint nonSparsableDataPoints;  // index=0的点
+
+        for (const auto& pair : dataPoints1) {
+            if (pair.second.index == 1) {
+                sparsableDataPoints[pair.first] = pair.second;
+            } else if (pair.second.index == 0) {
+                nonSparsableDataPoints[pair.first] = pair.second;
+            }
+        }
+
+        if (sparsableDataPoints.empty()) {
+            std::cerr << "No sparsable data points found (index=1)." << std::endl;
+            return -1;
+        }
+
+        // 计算可稀疏区域的测区范围和格网间距
+        std::vector<double> lons, lats;
+        lons.reserve(sparsableDataPoints.size());
+        lats.reserve(sparsableDataPoints.size());
+
+        for (const auto& pair : sparsableDataPoints) {
+            lons.push_back(pair.second.X);  // 经度
+            lats.push_back(pair.second.Y);  // 纬度
+        }
+
+        // 计算测区范围
+        double min_lon = *std::min_element(lons.begin(), lons.end());
+        double max_lon = *std::max_element(lons.begin(), lons.end());
+        double min_lat = *std::min_element(lats.begin(), lats.end());
+        double max_lat = *std::max_element(lats.begin(), lats.end());
+
+        // 计算平面距离范围
+        double center_lat = (min_lat + max_lat) / 2.0;
+        double lon_range_m = max_lon - min_lon;
+        double lat_range_m = max_lat - min_lat;
+
+        // 计算格网间距（假设为规则格网）
+        std::set<double> unique_lons(lons.begin(), lons.end());
+        std::set<double> unique_lats(lats.begin(), lats.end());
+
+        double lon_spacing = 0.0;
+        double lat_spacing = 0.0;
+
+        if (unique_lons.size() > 1) {
+            auto it = unique_lons.begin();
+            double prev_lon = *it++;
+            std::vector<double> lon_diffs;
+            while (it != unique_lons.end()) {
+                lon_diffs.push_back(*it - prev_lon);
+                prev_lon = *it++;
+            }
+            lon_spacing = *std::min_element(lon_diffs.begin(), lon_diffs.end());
+        }
+
+        if (unique_lats.size() > 1) {
+            auto it = unique_lats.begin();
+            double prev_lat = *it++;
+            std::vector<double> lat_diffs;
+            while (it != unique_lats.end()) {
+                lat_diffs.push_back(*it - prev_lat);
+                prev_lat = *it++;
+            }
+            lat_spacing = *std::min_element(lat_diffs.begin(), lat_diffs.end());
+        }
+
+        // 转换为平面距离
+        double lon_spacing_m = lon_spacing * 111319 * std::cos(center_lat * M_PI / 180.0);
+        double lat_spacing_m = lat_spacing * 111319;
+        searchRadius = lon_spacing_m * 2;
+
+        // 构建空间索引来优化性能
+        HierarchicalGridIndex spatialIndex;
+        spatialIndex.buildIndex(sparsableDataPoints, center_lat);
+
+        // 提取可稀疏区域的背景场数据（移到循环外，避免重复计算）
+        std::vector<double> sfq_all_x, sfq_all_y, sfq_all_z;
+        sfq_all_x.reserve(sparsableDataPoints.size());
+        sfq_all_y.reserve(sparsableDataPoints.size());
+        sfq_all_z.reserve(sparsableDataPoints.size());
+
+        for (const auto& pair : sparsableDataPoints) {
+            sfq_all_x.push_back(pair.second.X);
+            sfq_all_y.push_back(pair.second.Y);
+            sfq_all_z.push_back(pair.second.tMagnetic);
+        }
+
+        // 用于加权RMSE的变量（需要线程安全）
+        double sum_weighted_sq_rmse = 0.0;
+        int total_points = 0;
+        int total_filtered_points = 0;
+
+        // 使用互斥锁保护进度更新和输出
+        std::mutex progress_mutex;
+        std::mutex output_mutex;
+        std::atomic<int> completed_files(0);
+
+        // 验证输入数据
+        if (checkLineDataFile.isEmpty()) {
+            std::cerr << "No checkline files provided." << std::endl;
+            return -1;
+        }
+
+// OpenMP并行处理检核线
+#pragma omp parallel for reduction(+:sum_weighted_sq_rmse,total_points,total_filtered_points) schedule(dynamic)
+        for (int i = 0; i < checkLineDataFile.size(); ++i) {
+            try {
+                const QString& filepath = checkLineDataFile[i];
+
+                Geomagnetic::Datapoint checkLineData_old;
+                Geomagnetic::Datapoint checkLineData;
+
+                // 安全的文件读取
+                readData(filepath, checkLineData_old);
+
+
+                // 每隔五个点选取一个点 - 改进版本
+                checkLineData.clear();
+                int index_sparse = 0;
+                for (const auto& pair : checkLineData_old) {
+                    if (index_sparse % 5 == 0) {
+                        checkLineData[pair.first] = pair.second;
+                    }
+                    index_sparse++;
+                }
+
+                if (checkLineData.empty()) {
+                    std::lock_guard<std::mutex> lock(output_mutex);
+                    std::cerr << "No data after sparse sampling for file: " << filepath.toStdString() << std::endl;
+                    continue;
+                }
+
+                // 过滤数据
+                checkLineData = filterGeoMagneticData(checkLineData);
+                if (checkLineData.empty()) {
+                    std::lock_guard<std::mutex> lock(output_mutex);
+                    std::cerr << "No data after filtering for file: " << filepath.toStdString() << std::endl;
+                    continue;
+                }
+
+                // 筛选检核线点：只保留在可稀疏区域附近的点
+                std::vector<double> line_data_x, line_data_y, line_data_mag;
+                int original_points = checkLineData.size();
+
+                // 预分配空间
+                line_data_x.reserve(original_points);
+                line_data_y.reserve(original_points);
+                line_data_mag.reserve(original_points);
+
+                for (const auto& pair : checkLineData) {
+                    double check_x = pair.second.X;
+                    double check_y = pair.second.Y;
+
+                    // 使用空间索引优化查询
+                    bool inSparsableArea = spatialIndex.isInSparsableArea(check_x, check_y, searchRadius);
+
+                    if (inSparsableArea) {
+                        line_data_x.push_back(check_x);
+                        line_data_y.push_back(check_y);
+                        line_data_mag.push_back(pair.second.tMagnetic);
+                    }
+                }
+
+                int filtered_points = original_points - line_data_x.size();
+                total_filtered_points += filtered_points;
+
+                int n_points = line_data_x.size();
+                if (n_points == 0) {
+                    std::lock_guard<std::mutex> lock(output_mutex);
+                    std::cout << "[文件 " << filepath.toStdString() << "] 无可稀疏区域内的数据点，跳过" << std::endl;
+                    continue;
+                }
+
+                // 插值（使用可稀疏区域的背景场数据）
+                // 注意：每个线程需要创建自己的插值器实例
+                Geomagnetic::OptimizedCubicInterpolator cubicInterpolator;
+                std::vector<double> extract_data_mag;
+
+                try {
+                    extract_data_mag = cubicInterpolator.cubic_interpolate(
+                        sfq_all_x, sfq_all_y, sfq_all_z,
+                        line_data_x, line_data_y
+                        );
+                } catch (const std::exception& e) {
+                    std::lock_guard<std::mutex> lock(output_mutex);
+                    std::cerr << "Interpolation failed for file: " << filepath.toStdString()
+                              << ", error: " << e.what() << std::endl;
+                    continue;
+                }
+
+                // 检查长度
+                if (extract_data_mag.size() != line_data_mag.size()) {
+                    std::lock_guard<std::mutex> lock(output_mutex);
+                    std::cerr << "Data length mismatch for file: " << filepath.toStdString()
+                              << " (extracted: " << extract_data_mag.size()
+                              << ", original: " << line_data_mag.size() << ")" << std::endl;
+                    continue;
+                }
+
+                // 原始RMSE
+                double sum_squared_diff = 0.0;
+                for (size_t j = 0; j < line_data_mag.size(); ++j) {
+                    double diff = line_data_mag[j] - extract_data_mag[j];
+                    sum_squared_diff += diff * diff;
+                }
+                double rmse_o = std::sqrt(sum_squared_diff / line_data_mag.size());
+
+                // 移动平均提取趋势
+                int windowSize = 140 * 8;
+                if (windowSize >= static_cast<int>(extract_data_mag.size())) {
+                    windowSize = std::max(1, static_cast<int>(extract_data_mag.size()) / 4);
+                }
+
+                std::vector<double> trend_extract_data = movingAverage(extract_data_mag, windowSize);
+                std::vector<double> trend_line_data = movingAverage(line_data_mag, windowSize);
+
+                // 趋势线对齐和RMSE
+                double rmse_trend_o, removeLength;
+                std::vector<double> modified_trend;
+
+                try {
+                    std::tie(rmse_trend_o, modified_trend, removeLength) =
+                        removeTrendLine(trend_extract_data, trend_line_data);
+                } catch (const std::exception& e) {
+                    std::lock_guard<std::mutex> lock(output_mutex);
+                    std::cerr << "Trend removal failed for file: " << filepath.toStdString()
+                              << ", error: " << e.what() << std::endl;
+                    rmse_trend_o = rmse_o; // 使用原始RMSE作为备选
+                }
+
+                // 加权统计（使用reduction自动处理）
+                sum_weighted_sq_rmse += rmse_trend_o * rmse_trend_o * n_points;
+                total_points += n_points;
+
+            } catch (const std::exception& e) {
+                std::lock_guard<std::mutex> lock(output_mutex);
+                std::cerr << "Exception in processing file " << i << ": " << e.what() << std::endl;
+                continue;
+            }
+
+            // 线程安全的进度更新 - 移到并行区域外
+            int current_completed = ++completed_files;
+            if (current_completed % 10 == 0 || current_completed == checkLineDataFile.size()) {
+                std::lock_guard<std::mutex> lock(progress_mutex);
+// 在主线程中发送信号
+#pragma omp critical
+                {
+                }
+            }
+        }
+
+        if (total_points == 0) {
+            std::cerr << "No valid checkline data found in sparsable areas." << std::endl;
+            return -1;
+        }
+
+        // 显示可稀疏区域背景场测区信息
+        std::cout << "========== 背景场测区信息 ==========" << std::endl;
+        std::cout << "经度范围: " << std::fixed << std::setprecision(6)
+                  << min_lon << "° ~ " << max_lon << "° (跨度: "
+                  << std::setprecision(6) << lon_range_m << " °)" << std::endl;
+        std::cout << "纬度范围: " << std::fixed << std::setprecision(6)
+                  << min_lat << "° ~ " << max_lat << "° (跨度: "
+                  << std::setprecision(6) << lat_range_m << " °)" << std::endl;
+        std::cout << "格网间距: 经向 " << std::fixed << std::setprecision(1)
+                  << lon_spacing_m - 2 << " m, 纬向 " << lat_spacing_m - 2 << " m" << std::endl;
+        std::cout << "====================================" << std::endl;
+
+        double overall_rmse = std::sqrt(sum_weighted_sq_rmse / total_points);
+        std::cout << "所有检核线总RMSE: " << std::setprecision(4) << overall_rmse << " nT" << std::endl;
+
+        return overall_rmse;
+
+    } catch (const std::exception& e) {
+        std::cerr << "Fatal error in computeSparseCheckLineRMSE: " << e.what() << std::endl;
+        return -1;
+    } catch (...) {
+        std::cerr << "Unknown fatal error in computeSparseCheckLineRMSE" << std::endl;
+        return -1;
     }
 }

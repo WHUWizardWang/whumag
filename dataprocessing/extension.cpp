@@ -87,19 +87,100 @@ yanTuo::~yanTuo()
 {
 }
 
-void yanTuo::createGrid(std::vector<double>a, int rows, int cols, MatrixXd& A)
+void yanTuo::createGrid(const Geomagnetic::Datapoint& datapoints,
+                        double step_x,
+                        double step_y,
+                        Eigen::MatrixXd& X1,
+                        Eigen::MatrixXd& Y1,
+                        Eigen::MatrixXd& T1)
 {
-    int i = 0;
-    int j = 0;
-    Eigen::MatrixXd  B(rows, cols);
-    for (i = 0; i < rows; i = i + 1)
-    {
-        for (j = 0; j < cols; j = j + 1)
-        {
-            B(i, j) = a[j + i * cols];
+    if (datapoints.empty()) return;
+
+    // Step 1: 提取并排序唯一的输入坐标 (已为米单位)
+    std::vector<double> xs, ys;
+    xs.reserve(datapoints.size());
+    ys.reserve(datapoints.size());
+    for (const auto& kv : datapoints) {
+        xs.push_back(kv.second.X);
+        ys.push_back(kv.second.Y);
+    }
+    std::sort(xs.begin(), xs.end());
+    xs.erase(std::unique(xs.begin(), xs.end()), xs.end());
+    std::sort(ys.begin(), ys.end());
+    ys.erase(std::unique(ys.begin(), ys.end()), ys.end());
+
+    int in_cols = static_cast<int>(xs.size());
+    int in_rows = static_cast<int>(ys.size());
+
+    // Step 2: 构建输入格网的值矩阵 T_in
+    Eigen::MatrixXd T_in(in_rows, in_cols);
+    std::map<std::pair<double,double>, double> valueMap;
+    for (const auto& kv : datapoints) {
+        valueMap[{kv.second.Y, kv.second.X}] = kv.second.tMagnetic;
+    }
+    for (int i = 0; i < in_rows; ++i) {
+        for (int j = 0; j < in_cols; ++j) {
+            T_in(i, j) = valueMap[{ys[i], xs[j]}];
         }
     }
-    A = B;
+
+    // Step 3: 计算输出格网范围与尺寸 (以米为单位)
+    double minX = xs.front(), maxX = xs.back();
+    double minY = ys.front(), maxY = ys.back();
+    int rows = static_cast<int>((maxY - minY) / step_y) + 1;
+    int cols = static_cast<int>((maxX - minX) / step_x) + 1;
+
+    X1.resize(rows, cols);
+    Y1.resize(rows, cols);
+    T1.resize(rows, cols);
+
+    // Step 4: 双线性插值或最近邻填充输出格网
+    for (int i = 0; i < rows; ++i) {
+        double y = minY + i * step_y;
+        for (int j = 0; j < cols; ++j) {
+            double x = minX + j * step_x;
+            X1(i, j) = x;
+            Y1(i, j) = y;
+
+            auto itx1 = std::upper_bound(xs.begin(), xs.end(), x);
+            auto ity1 = std::upper_bound(ys.begin(), ys.end(), y);
+            if (itx1 == xs.begin() || ity1 == ys.begin() || itx1 == xs.end() || ity1 == ys.end()) {
+                // 边界外，最近邻插值
+                double minDist = std::numeric_limits<double>::max();
+                double nearestT = 0;
+                for (const auto& kv : datapoints) {
+                    double dx = kv.second.X - x;
+                    double dy = kv.second.Y - y;
+                    double dist = dx * dx + dy * dy;
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestT = kv.second.tMagnetic;
+                    }
+                }
+                T1(i, j) = nearestT;
+                continue;
+            }
+            int ix1 = static_cast<int>(itx1 - xs.begin());
+            int ix0 = ix1 - 1;
+            int iy1 = static_cast<int>(ity1 - ys.begin());
+            int iy0 = iy1 - 1;
+
+            double x0 = xs[ix0], x1_ = xs[ix1];
+            double y0 = ys[iy0], y1_ = ys[iy1];
+            double f00 = T_in(iy0, ix0);
+            double f10 = T_in(iy0, ix1);
+            double f01 = T_in(iy1, ix0);
+            double f11 = T_in(iy1, ix1);
+
+            double tx = (x - x0) / (x1_ - x0);
+            double ty = (y - y0) / (y1_ - y0);
+
+            T1(i, j) = (1 - tx) * (1 - ty) * f00
+                       + tx * (1 - ty) * f10
+                       + (1 - tx) * ty * f01
+                       + tx * ty * f11;
+        }
+    }
 }
 
 MatrixXd yanTuo::addBorder(MatrixXd A)
@@ -301,14 +382,9 @@ void yanTuo::TongJi(std::vector<double>dt, std::vector<double>down)
             ", Std Dev_delt: " +QString::number(std_delt)+"\n";
 
 }
-
-void yanTuo::up_run(int gridrow,int gridcol,std::vector<double>X, std::vector<double>Y, std::vector<double>T, double xint, double yint, double h,std::string outfile)
+void yanTuo::up_run(Geomagnetic::Datapoint& datapoints, double step_x, double step_y, double h, std::string outfile)
 {
-    //格网化
-    createGrid(X, gridrow, gridcol, X1);
-    createGrid(Y, gridrow, gridcol, Y1);
-    createGrid(T, gridrow, gridcol, T1);
-
+    createGrid(datapoints, step_x, step_y, X1, Y1, T1);
     //第一步，进行扩边处理
     data = addBorder(T1);
     row1 = T1.rows();
@@ -323,7 +399,7 @@ void yanTuo::up_run(int gridrow,int gridcol,std::vector<double>X, std::vector<do
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
     ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
-    ff = calculation_up(xint, yint, h, row2, col2, fx);
+    ff = calculation_up(step_x, step_y, h, row2, col2, fx);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
@@ -335,23 +411,285 @@ void yanTuo::up_run(int gridrow,int gridcol,std::vector<double>X, std::vector<do
 
     //输出向上延拓结果 X Y Z T1 T2
     std::ofstream fout(outfile);
-//    fout << "X Y h T T_up" << endl;
-    for (int i = 0; i < up.size(); i = i + 1)
-    {
-        fout << X[i] << " " << Y[i]  << " " << up[i] << std::endl;
+    if (!fout.is_open()) {
+        std::cerr << "无法打开输出文件: " << outfile << std::endl;
+        return;
+    }
+
+    // 按行列输出：X1, Y1, 原始 T1, 延拓结果 up
+    for (int i = 0; i < row1; ++i) {
+        for (int j = 0; j < col1; ++j) {
+            double x  = X1(i, j);
+            double y  = Y1(i, j);
+            double t2 = up[i * col1 + j];
+            fout << x << " "
+                 << y << " "
+                 << t2 << std::endl;
+        }
     }
     fout.close();
+}
+void yanTuo::up_run_BL(Geomagnetic::Datapoint& datapoints, double step_x_deg, double step_y_deg, double h, std::string outfile)
+{
+    try {
+        qDebug() << "开始向上延拓处理, 数据点数:" << datapoints.size();
+
+        if (datapoints.empty()) {
+            throw std::runtime_error("输入数据为空");
+        }
+
+        // 保存原始的经纬度坐标
+        std::map<int, std::pair<double, double>> originalCoords;
+        int idx = 0;
+        for (const auto& kv : datapoints) {
+            originalCoords[idx] = {kv.second.lon, kv.second.lat};
+            idx++;
+        }
+
+        // 间隔转换
+        double sumLat = 0.0;
+        for (const auto& kv : datapoints) {
+            sumLat += kv.second.lat;
+        }
+        double latMean = sumLat / datapoints.size();
+
+        const double earthR = 6371000.0;
+        const double deg2rad = M_PI / 180.0;
+        double meterPerDegLat = earthR * deg2rad;
+        double meterPerDegLon = earthR * std::cos(latMean * deg2rad) * deg2rad;
+
+        double step_x = step_x_deg * meterPerDegLon;
+        double step_y = step_y_deg * meterPerDegLat;
+        h = h * 1000;
+
+        // 坐标转换
+        for (auto& kv : datapoints) {
+            kv.second.X = kv.second.lon * meterPerDegLon;
+            kv.second.Y = kv.second.lat * meterPerDegLat;
+        }
+
+        qDebug() << "坐标转换完成";
+
+        // 格网化
+        createGrid(datapoints, step_x, step_y, X1, Y1, T1);
+        qDebug() << "格网化完成, 网格大小:" << T1.rows() << "x" << T1.cols();
+
+        if (T1.rows() == 0 || T1.cols() == 0) {
+            throw std::runtime_error("格网化失败，网格为空");
+        }
+
+        // 扩边处理
+        data = addBorder(T1);
+        row1 = T1.rows();
+        col1 = T1.cols();
+        row2 = data.rows();
+        col2 = data.cols();
+
+        qDebug() << "扩边处理完成:" << row1 << "x" << col1 << " -> " << row2 << "x" << col2;
+
+        // FFT 变换
+        fx = nullptr;  // 初始化为空指针
+        try {
+            fx = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
+            if (!fx) {
+                throw std::runtime_error("FFT 内存分配失败");
+            }
+
+            // 注意：这里假设 fft_2d 函数会填充 fx，而不是重新分配
+            fftw_complex* temp_fx = fftw.fft_2d(data, row2, col2);
+            if (temp_fx != fx) {
+                // 如果 fft_2d 返回了不同的指针，需要复制数据
+                memcpy(fx, temp_fx, sizeof(fftw_complex) * row2 * col2);
+            }
+
+            fftw.fftshift(fx, row2, col2);
+            qDebug() << "FFT 变换完成";
+
+        } catch (...) {
+            if (fx) {
+                fftw_free(fx);
+                fx = nullptr;
+            }
+            throw;
+        }
+
+        // 计算延拓
+        ff = nullptr;
+        try {
+            ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
+            if (!ff) {
+                throw std::runtime_error("延拓计算内存分配失败");
+            }
+
+            fftw_complex* temp_ff = calculation_up(step_x, step_y, h, row2, col2, fx);
+            if (temp_ff != ff) {
+                memcpy(ff, temp_ff, sizeof(fftw_complex) * row2 * col2);
+            }
+
+            fftw.fftshift(ff, row2, col2);
+            qDebug() << "延拓计算完成";
+
+        } catch (...) {
+            if (ff) {
+                fftw_free(ff);
+                ff = nullptr;
+            }
+            if (fx) {
+                fftw_free(fx);
+                fx = nullptr;
+            }
+            throw;
+        }
+
+        // 清理 fx
+        if (fx) {
+            fftw_free(fx);
+            fx = nullptr;
+        }
+
+        // 逆变换
+        upT = nullptr;
+        try {
+            upT = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
+            if (!upT) {
+                throw std::runtime_error("逆变换内存分配失败");
+            }
+
+            fftw_complex* temp_upT = fftw.ifft_2d(row2, col2, ff);
+            if (temp_upT != upT) {
+                memcpy(upT, temp_upT, sizeof(fftw_complex) * row2 * col2);
+            }
+
+            up = get_result(upT, T1, data);
+            qDebug() << "逆变换完成";
+
+        } catch (...) {
+            if (upT) {
+                fftw_free(upT);
+                upT = nullptr;
+            }
+            if (ff) {
+                fftw_free(ff);
+                ff = nullptr;
+            }
+            throw;
+        }
+
+        // 输出结果
+        std::ofstream fout(outfile);
+        if (!fout.is_open())
+            throw std::runtime_error("无法打开输出文件: " + outfile);
+
+        qDebug() << "开始写入结果文件:" << QString::fromStdString(outfile);
+
+        int pointCount = 0;
+        for (int i = 0; i < row1; ++i) {
+            for (int j = 0; j < col1; ++j) {
+                std::size_t index = static_cast<std::size_t>(i) * col1 + j;
+                Q_ASSERT(index < static_cast<std::size_t>(row1) * col1); // 越界即中断
+
+                // 将平面坐标转换回经纬度
+                double x_meter = X1(i, j);
+                double y_meter = Y1(i, j);
+                double lon = x_meter / meterPerDegLon;
+                double lat = y_meter / meterPerDegLat;
+                double t2  = up[index];
+
+                if (std::isnan(lon) || std::isnan(lat) || std::isnan(t2))
+                    continue;
+
+                fout << std::fixed << std::setprecision(6)
+                     << lon << ' ' << lat << ' '
+                     << std::setprecision(3) << t2 << '\n';
+                ++pointCount;
+            }
+        }
+        fout.close();
+        qDebug() << "结果写入完成，共" << pointCount << "个数据点（经纬度坐标）";
+
+        /******************** 现在再释放 FFTW 缓冲 ****************/
+        if (upT) { fftw_free(upT); upT = nullptr; }
+    } catch (const std::exception& e) {
+        qCritical() << "up_run_BL 异常:" << e.what();
+        throw;
+    }
     
-//    cout << "向上延拓处理完成！" << endl;
-//    cout << endl << endl << endl << endl;
 }
 
-void yanTuo::down_run(int gridrow, int gridcol, std::vector<double>X, std::vector<double>Y, std::vector<double>T, double xint, double yint, double h, std::string outfile, int choice)
+void yanTuo::down_run(Geomagnetic::Datapoint& datapoints,double step_x, double step_y,
+                      double h, std::string outfile, int choice)
 {
     //格网化
-    createGrid(X, gridrow, gridcol, X1);
-    createGrid(Y, gridrow, gridcol, Y1);
-    createGrid(T, gridrow, gridcol, T1);
+    // createGrid(X, gridro);
+    createGrid(datapoints, step_x, step_y, X1, Y1, T1);
+    //第一步，进行扩边处理
+    data = addBorder(T1);
+    row1 = T1.rows();
+    col1 = T1.cols();
+    row2 = data.rows();
+    col2 = data.cols();
+
+    //第二步 进行二维fft变换
+    fx = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * data.rows() * data.cols());
+    fx = fftw.fft_2d(data, row2, col2);
+    fftw.fftshift(fx, row2, col2);
+
+    //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
+    ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
+    ff = calculation_down(step_x, step_y, h, row2, col2, fx, choice);
+    fftw.fftshift(ff, row2, col2);
+    fftw_free(fx);
+
+    //第五步 傅立叶逆变换，重构延拓后的磁异常
+    downT = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
+    downT = fftw.ifft_2d(row2, col2, ff);
+    down = get_result(downT, T1, data);
+    fftw_free(downT);
+
+    //输出向下延拓结果 X Y Z T1 T2
+    std::ofstream fout(outfile);
+    if (!fout.is_open()) {
+        std::cerr << "无法打开输出文件: " << outfile << std::endl;
+        return;
+    }
+
+    // 按行列输出：X1, Y1, 原始 T1, 延拓结果 up
+    for (int i = 0; i < row1; ++i) {
+        for (int j = 0; j < col1; ++j) {
+            double x  = X1(i, j);
+            double y  = Y1(i, j);
+            double t2 = down[i * col1 + j];
+            fout << x << " "
+                 << y << " "
+                 << t2 << std::endl;
+        }
+    }
+    fout.close();
+
+}
+
+void yanTuo::down_run_BL(Geomagnetic::Datapoint& datapoints,double step_x_deg, double step_y_deg,
+                         double h, std::string outfile, int choice)
+{
+    // 间隔转换
+    double sumLat = 0.0;
+    for (const auto& kv : datapoints) {
+        sumLat += kv.second.lat;
+    }
+    double latMean = sumLat / datapoints.size();
+    const double earthR = 6371000.0;             // Earth radius in meters
+    const double deg2rad = M_PI / 180.0;
+    double meterPerDegLat = earthR * deg2rad;    // meters per degree latitude
+    double meterPerDegLon = earthR * std::cos(latMean * deg2rad) * deg2rad; // meters per degree longitude
+    double step_x = step_x_deg * meterPerDegLon;
+    double step_y = step_y_deg * meterPerDegLat;
+    h = h * 1000;
+    for (auto& kv : datapoints) {
+        kv.second.X = kv.second.lon * meterPerDegLon;
+        kv.second.Y = kv.second.lat * meterPerDegLat;
+    }
+    //格网化
+    createGrid(datapoints, step_x, step_y, X1, Y1, T1);
 
     //第一步，进行扩边处理
     data = addBorder(T1);
@@ -367,7 +705,7 @@ void yanTuo::down_run(int gridrow, int gridcol, std::vector<double>X, std::vecto
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
     ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
-    ff = calculation_down(xint, yint, h, row2, col2, fx, choice);
+    ff = calculation_down(step_x, step_y, h, row2, col2, fx, choice);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
@@ -379,24 +717,56 @@ void yanTuo::down_run(int gridrow, int gridcol, std::vector<double>X, std::vecto
 
     //输出向下延拓结果 X Y Z T1 T2
     std::ofstream fout(outfile);
-//    fout << "X Y h T T_down" << endl;
-    for (int i = 0; i < down.size(); i = i + 1)
-    {
-        fout << X[i] << " " << Y[i] << " " << down[i] << std::endl;
+    if (!fout.is_open())
+        throw std::runtime_error("无法打开输出文件: " + outfile);
+
+    for (int i = 0; i < row1; ++i) {
+        for (int j = 0; j < col1; ++j) {
+            std::size_t idx = static_cast<std::size_t>(i)*col1 + j;
+
+            double x_meter = X1(i,j);
+            double y_meter = Y1(i,j);
+            double lon = x_meter / meterPerDegLon;   // 经度（度）
+            double lat = y_meter / meterPerDegLat;   // 纬度（度）
+            double t2  = down[idx];
+
+            fout << std::fixed << std::setprecision(6)
+                 << lon << " " << lat << " "
+                 << std::setprecision(3) << t2 << "\n";
+        }
     }
-    fout.close();
-//    QMessageBox::information(this,"提示","向下延拓处理完成！");
-
 }
-
-void yanTuo::evaluatePrecision(int gridrow, int gridcol, std::vector<double>X, std::vector<double>Y, std::vector<double>T,
-                               double xint, double yint, double h, int choice,std::string outfile)
+void yanTuo::evaluatePrecision(Geomagnetic::Datapoint& datapoints,bool useBL,
+                               double step_x_deg, double step_y_deg, double h, int choice,std::string outfile)
 {
-    //格网化
-    createGrid(X, gridrow, gridcol, X1);
-    createGrid(Y, gridrow, gridcol, Y1);
-    createGrid(T, gridrow, gridcol, T1);
 
+    double step_x, step_y;
+    double sumLat = 0.0;
+    for (const auto& kv : datapoints) {
+        sumLat += kv.second.lat;
+    }
+    double latMean = sumLat / datapoints.size();
+    const double earthR = 6371000.0;             // Earth radius in meters
+    const double deg2rad = M_PI / 180.0;
+    double meterPerDegLat = earthR * deg2rad;    // meters per degree latitude
+    double meterPerDegLon = earthR * std::cos(latMean * deg2rad) * deg2rad; // meters per degree longitude
+    if(useBL)
+    {
+        // 间隔转换
+        step_x = step_x_deg * meterPerDegLon;
+        step_y = step_y_deg * meterPerDegLat;
+        h = h * 1000;
+        for (auto& kv : datapoints) {
+            kv.second.X = kv.second.lon * meterPerDegLon;
+            kv.second.Y = kv.second.lat * meterPerDegLat;
+        }
+    }
+    else
+    {
+        step_x = step_x_deg;
+        step_y = step_y_deg;
+    }
+    createGrid(datapoints, step_x, step_y, X1, Y1, T1);
     /*------------------------------------------------------- 先获取向上延拓结果，作为向下延拓的起算数据----------------------------------------------------------------------- */
     //第一步，进行扩边处理
     data = addBorder(T1);
@@ -412,7 +782,7 @@ void yanTuo::evaluatePrecision(int gridrow, int gridcol, std::vector<double>X, s
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
     ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
-    ff = calculation_up(xint, yint, h, row2, col2, fx);
+    ff = calculation_up(step_x, step_y, h, row2, col2, fx);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
@@ -424,7 +794,7 @@ void yanTuo::evaluatePrecision(int gridrow, int gridcol, std::vector<double>X, s
 
     /* ----------------------------------------------利用向上延拓结果，向下延拓至原始平面进行精度评估 ------------------------------------------------------------------------*/
     //格网化
-    createGrid(up, gridrow, gridcol, T1);
+    // createGrid(up, gridrow, gridcol, T1);
 
     //第一步，进行扩边处理
     data = addBorder(T1);
@@ -440,7 +810,7 @@ void yanTuo::evaluatePrecision(int gridrow, int gridcol, std::vector<double>X, s
 
     //第三步 计算对应的角频率u、v、延拓因子Q，及延拓公式，得到延拓后的磁异常频谱
     ff = (fftw_complex*)fftw_malloc(sizeof(fftw_complex) * row2 * col2);
-    ff = calculation_down(xint, yint, h, row2, col2, fx, choice);
+    ff = calculation_down(step_x, step_y, h, row2, col2, fx, choice);
     fftw.fftshift(ff, row2, col2);
     fftw_free(fx);
 
@@ -452,22 +822,42 @@ void yanTuo::evaluatePrecision(int gridrow, int gridcol, std::vector<double>X, s
 
     //输出向下延拓结果 X Y Z T1 T2
     std::ofstream fout(outfile);
-//    fout << "X Y h T T_down" << endl;
-    for (int i = 0; i < down.size(); i = i + 1)
+    if(!useBL)
     {
-        fout << X[i] << " " << Y[i] << " " << down[i] << std::endl;
+        for (int i = 0; i < row1; ++i) {
+            for (int j = 0; j < col1; ++j) {
+                double x  = X1(i, j);
+                double y  = Y1(i, j);
+                double t2 = down[i * col1 + j];
+                fout << x << " "
+                     << y << " "
+                     << t2 << std::endl;
+            }
+        }
+    }
+    else
+    {
+        for (int i = 0; i < row1; ++i) {
+            for (int j = 0; j < col1; ++j) {
+                std::size_t idx = static_cast<std::size_t>(i)*col1 + j;
+
+                double x_meter = X1(i,j);
+                double y_meter = Y1(i,j);
+                double lon = x_meter / meterPerDegLon;   // 经度（度）
+                double lat = y_meter / meterPerDegLat;   // 纬度（度）
+                double t2  = down[idx];
+
+                fout << std::fixed << std::setprecision(6)
+                     << lon << " " << lat << " "
+                     << std::setprecision(3) << t2 << "\n";
+            }
+        }
     }
     fout.close();
 
     /* ------------------------------------------------------利用上面的计算结果进行精度评估,输出精度报告 ------------------------------------------------------------------------*/
 
     out = out + "*************输出精度报告***********\n";
-    // 输出相关计算信息
-    out = out+"xint: "+QString::number(xint)+"\n";
-    out = out+"yint: "+QString::number(yint)+"\n";
-    out = out+"h: "+QString::number(h)+"\n";
-    out = out+"gridrows: "+QString::number(gridrow)+"\n";
-    out = out+"gridcols: "+QString::number(gridcol)+"\n";
     if (choice == 1)
     {
         out = out+"向下延拓因子计算方式:  Tikhonov正则化法向下延拓算子" +"\n";
@@ -486,6 +876,12 @@ void yanTuo::evaluatePrecision(int gridrow, int gridcol, std::vector<double>X, s
         out = out+"向下延拓因子计算方式:  迭代Tikhonov正则化法向下延拓算子"  +"\n";
     }
     out = out+"精度统计信息如下：" + "\n";
+    std::vector<double> T;
+    for (int i = 0; i < row1; ++i) {
+        for (int j = 0; j < col1; ++j) {
+            T.push_back(T1(i, j));
+        }
+    }
     TongJi(T, down);
 }
 

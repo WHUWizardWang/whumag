@@ -20,7 +20,7 @@
       <string notr="true">;}</string>
      </property>
      <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;关于 基于稀疏磁测数据地磁基准图高效构建软件&lt;/p&gt;&lt;p&gt;版权所有(C) 2024.11 &lt;/p&gt;&lt;p&gt;中国人民解放军海军大连舰艇学院&lt;/p&gt;&lt;p&gt;军事海洋与测绘系&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;关于 基于稀疏磁测数据的地磁基准图高效构建系统V1.2&lt;/p&gt;&lt;p&gt;版权所有(C) 2024.11 &lt;/p&gt;&lt;p&gt;中国人民解放军海军大连舰艇学院&lt;/p&gt;&lt;p&gt;军事海洋与测绘系&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
      <property name="margin">
       <number>2</number>

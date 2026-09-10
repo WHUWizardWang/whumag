@@ -30,7 +30,8 @@ public:
     ~draw_Form();
     void set_HeatOrSactterView(QVector<double> xx,QVector<double> yy,QVector<double> result);
     void set_heatMapView(QVector<double> xx,QVector<double> yy,QVector<double> result);
-    void autoset_heatMapView(QVector<double> xx,QVector<double> yy,QVector<double> result);;
+    void autoset_heatMapView(QVector<double> xx,QVector<double> yy,QVector<double> result);
+    void autoset_contourView(QVector<double> xx,QVector<double> yy,QVector<double> result);
     std::pair<double, double> findMinMax(const QVector<QVector<double>>& vec);
     double findDifferenceInArithmeticSequence(const QVector<double>& sequence);
     void create_xyz_p(QVector<AnoPoint> ano_pnts,QVector<double> &xx,QVector<double> &yy,QVector<double> &result);
@@ -38,6 +39,7 @@ public:
     void set_ContourView(QString filename);
     void create_contour_txt(QVector<AnoPoint> &ano_pnts);
     int findClosestIndex(const QList<double>& sortedValues, double target);
+    void setMapStep(double dx,double dy);
     QString con_path;
 
     //格网分辨率

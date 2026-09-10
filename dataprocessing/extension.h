@@ -3,8 +3,8 @@
 #include <eigen-3.4.0/Eigen/Dense>
 //#include "fftw.h"
 #include <vector>
-#include "fftw3.h"
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <vector>
 #include <cmath>
@@ -15,6 +15,8 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <QFile>
+#include "fftw3.h"
+#include "DataStruct.h"
 using namespace  Eigen;
 
 class FFTW
@@ -22,9 +24,9 @@ class FFTW
 public:
     FFTW();
     ~FFTW();
-    void fftshift(fftw_complex* data, int rows, int cols);//ÆµÆ×ÖĞĞÄ»¯º¯Êı
-    fftw_complex* fft_2d(const MatrixXd& real_input, int& rows, int& cols);//¶şÎ¬¸µÀïÒ¶ÕıÏò±ä»»º¯Êı
-    fftw_complex* ifft_2d(int& rows, int& cols, fftw_complex* in);//¶şÎ¬¸µÀïÒ¶Äæ±ä»»º¯Êı
+    void fftshift(fftw_complex* data, int rows, int cols);//é¢‘è°±ä¸­å¿ƒåŒ–å‡½æ•°
+    fftw_complex* fft_2d(const MatrixXd& real_input, int& rows, int& cols);//äºŒç»´å‚…é‡Œå¶æ­£å‘å˜æ¢å‡½æ•°
+    fftw_complex* ifft_2d(int& rows, int& cols, fftw_complex* in);//äºŒç»´å‚…é‡Œå¶é€†å˜æ¢å‡½æ•°
 
 private:
 
@@ -36,20 +38,29 @@ public:
 	yanTuo();
 	~yanTuo();
 	
-    void createGrid(std::vector<double>a, int rows, int cols, MatrixXd& A);//¸ñÍø»¯º¯Êı
-	MatrixXd addBorder(MatrixXd A);//À©±ßº¯Êı£¬Âú×ã¸µÀïÒ¶±ä»»¶ÔÓÚĞĞÊıÁĞÊıµÄÒªÇó
-	fftw_complex* calculation_up(double xint, double yint, double h, int rows, int cols, fftw_complex* in);//¼ÆËã¶ÔÓ¦µÄ½ÇÆµÂÊu¡¢v¡¢ÑÓÍØÒò×ÓQ£¬´¦ÀíµÃµ½ÏòÉÏÑÓÍØºóµÄ´ÅÒì³£ÆµÆ×
-	fftw_complex* calculation_down(double xint, double yint, double h, int ln, int col, fftw_complex* in, int choice);//¼ÆËã¶ÔÓ¦µÄ½ÇÆµÂÊu¡¢v¡¢ÑÓÍØÒò×ÓQ£¬´¦ÀíµÃµ½ÏòÏÂÑÓÍØºóµÄ´ÅÒì³£ÆµÆ×
-    std::vector<double> get_result(fftw_complex* in, MatrixXd A, MatrixXd B);//É¾³ıÀ©±ßĞÅÏ¢²¢ÌáÈ¡ÑÓÍØ´ÅÒì³£Öµ
-	double calculate_H(double R, int choice);// ÓÃÓÚÏòÏÂÑÓÍØÊ±¼ÆËãÑÓÍØÒò×Ó
-    void TongJi(std::vector<double>dt, std::vector<double>down);//Êä³öÍ³¼ÆĞÅÏ¢
+    void createGrid(const Geomagnetic::Datapoint& datapoints,
+                    double step_x,
+                    double step_y,
+                    Eigen::MatrixXd& X1,
+                    Eigen::MatrixXd& Y1,
+                    Eigen::MatrixXd& T1);//æ ¼ç½‘åŒ–å‡½æ•°
+	MatrixXd addBorder(MatrixXd A);//æ‰©è¾¹å‡½æ•°ï¼Œæ»¡è¶³å‚…é‡Œå¶å˜æ¢å¯¹äºè¡Œæ•°åˆ—æ•°çš„è¦æ±‚
+	fftw_complex* calculation_up(double xint, double yint, double h, int rows, int cols, fftw_complex* in);//è®¡ç®—å¯¹åº”çš„è§’é¢‘ç‡uã€vã€å»¶æ‹“å› å­Qï¼Œå¤„ç†å¾—åˆ°å‘ä¸Šå»¶æ‹“åçš„ç£å¼‚å¸¸é¢‘è°±
+	fftw_complex* calculation_down(double xint, double yint, double h, int ln, int col, fftw_complex* in, int choice);//è®¡ç®—å¯¹åº”çš„è§’é¢‘ç‡uã€vã€å»¶æ‹“å› å­Qï¼Œå¤„ç†å¾—åˆ°å‘ä¸‹å»¶æ‹“åçš„ç£å¼‚å¸¸é¢‘è°±
+    std::vector<double> get_result(fftw_complex* in, MatrixXd A, MatrixXd B);//åˆ é™¤æ‰©è¾¹ä¿¡æ¯å¹¶æå–å»¶æ‹“ç£å¼‚å¸¸å€¼
+	double calculate_H(double R, int choice);// ç”¨äºå‘ä¸‹å»¶æ‹“æ—¶è®¡ç®—å»¶æ‹“å› å­
+    void TongJi(std::vector<double>dt, std::vector<double>down);//è¾“å‡ºç»Ÿè®¡ä¿¡æ¯
 
-    void up_run(int gridrow, int gridcol, std::vector<double>X, std::vector<double>Y, std::vector<double>T,
-                double xint, double yint, double h, std::string outfile);//Íê³ÉÏòÉÏÑÓÍØ´¦Àí
-    void down_run(int gridrow, int gridcol, std::vector<double>X, std::vector<double>Y, std::vector<double>T,
-                  double xint, double yint, double h, std::string outfile, int choice);//Íê³ÉÏòÏÂÑÓÍØ´¦Àí
-    void evaluatePrecision(int gridrow, int gridcol, std::vector<double>X, std::vector<double>Y, std::vector<double>T,
-                           double xint, double yint, double h, int choice,std::string outfile);// ÏÈÏòÉÏÑÓÍØÔÙÏòÏÂÑÓÍØÒÔ´ïµ½ÆÀ¹À¾«¶ÈµÄÄ¿µÄ
+    void up_run(Geomagnetic::Datapoint& datapoints,
+                double step_x, double step_y, double h, std::string outfile);//å®Œæˆå‘ä¸Šå»¶æ‹“å¤„ç†
+    void up_run_BL(Geomagnetic::Datapoint& datapoints,
+                   double step_x_deg, double step_y_deg, double h, std::string outfile);//å®Œæˆå‘ä¸Šå»¶æ‹“å¤„ç†
+    void down_run(Geomagnetic::Datapoint& datapoints,
+                  double step_x, double step_y, double h, std::string outfile, int choice);//å®Œæˆå‘ä¸‹å»¶æ‹“å¤„ç†
+    void down_run_BL(Geomagnetic::Datapoint& datapoints,
+                     double step_x_deg, double step_y_deg, double h, std::string outfile, int choice);//å®Œæˆå‘ä¸‹å»¶æ‹“å¤„ç†
+    void evaluatePrecision(Geomagnetic::Datapoint& datapoints,bool useBL,
+                           double step_x_deg, double step_y_deg, double h, int choice,std::string outfile);// å…ˆå‘ä¸Šå»¶æ‹“å†å‘ä¸‹å»¶æ‹“ä»¥è¾¾åˆ°è¯„ä¼°ç²¾åº¦çš„ç›®çš„
 
 	MatrixXd data;
 
@@ -58,8 +69,8 @@ public:
 	fftw_complex* upT;
 	fftw_complex* downT;
 
-    std::vector<double> up;// ÌáÈ¡ÏòÉÏÑÓÍØ½á¹û
-    std::vector<double> down;// ÌáÈ¡ÏòÏÂÑÓÍØ½á¹û
+    std::vector<double> up;// æå–å‘ä¸Šå»¶æ‹“ç»“æœ
+    std::vector<double> down;// æå–å‘ä¸‹å»¶æ‹“ç»“æœ
 
 	FFTW fftw;
 
@@ -68,11 +79,11 @@ public:
 	int row2;
 	int col2;
 
-	double H;// ÏòÏÂÑÓÍØËã×Ó
+	double H;// å‘ä¸‹å»¶æ‹“ç®—å­
 
-	Eigen::MatrixXd  X1;// ´æ´¢¸ñÍøÊı¾İX
-	Eigen::MatrixXd  Y1;// ´æ´¢¸ñÍøÊı¾İY
-	Eigen::MatrixXd  T1;// ´æ´¢¸ñÍøÊı¾İT
+	Eigen::MatrixXd  X1;// å­˜å‚¨æ ¼ç½‘æ•°æ®X
+	Eigen::MatrixXd  Y1;// å­˜å‚¨æ ¼ç½‘æ•°æ®Y
+	Eigen::MatrixXd  T1;// å­˜å‚¨æ ¼ç½‘æ•°æ®T
 
     QString out;
 

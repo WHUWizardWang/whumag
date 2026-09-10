@@ -240,34 +240,37 @@ void ReferenceMap::on_pushButton_clicked()
 
         // 设置参数
         Geomagnetic::Datapoint datapoints;                      // 当前选中的数据,原始数据
-        Geomagnetic::Datapoint datapoint_sparse;                // 抽稀后的数据
+//        Geomagnetic::Datapoint datapoint_sparse;                // 抽稀后的数据
         Geomagnetic::Datapoint datapoint_result;                // 计算后的数据
         Geomagnetic::ReadData readdata;
         Geomagnetic::Datainfo datainfo;
 
         readdata.readGridFromFile(str,datapoints);
-        datainfo.Cutoff = para0;
         readdata.interval = sparse_para * 10;
 
-        Geomagnetic::TaylorModel taylor;
-        std::string s = projectPath.toStdString()+"/Processed/"+filename.toStdString();
-        readdata.selectLineData(datapoints, datapoint_sparse, readdata.interval);
-        datapoint_result = datapoints;
-        readdata.DataSet(datapoint_sparse, datainfo);
-        for (auto& elem : datapoint_result)
-            elem.second.tMagnetic = 0;
-        ui->textBrowser->append("正在初始化...");
-        QCoreApplication::processEvents();
-        taylor.init(datainfo);
-        ui->textBrowser->append("正在计算M矩阵...");
-        QCoreApplication::processEvents();
-        taylor.CalculateM(datapoint_sparse);
-        ui->textBrowser->append("正在计算AQ矩阵...");
-        QCoreApplication::processEvents();
-        taylor.CalculateAQ(datapoint_sparse);
-        ui->textBrowser->append("正在计算结果...");
-        QCoreApplication::processEvents();
-        taylor.Result(datapoint_result);
+        // 创建泰勒模型并设置参数
+        Geomagnetic::TaylorModel taylorModel;
+        std::string s = filename.toStdString();
+        datainfo.Cutoff = para0;  // 设置泰勒多项式截止阶数
+        readdata.createGridData(datapoints, datapoint_result, dx, dy);
+
+        // 设置最小最大值并归一化数据
+        taylorModel.setMinMax(datapoints);
+        taylorModel.Normalize(datapoints);
+        taylorModel.Normalize(datapoint_result);
+
+        // 设置数据信息
+        readdata.DataSet(datapoints, datainfo);
+
+        // 设置中心点（默认为数据范围的中心点）
+        taylorModel.setCenter(datainfo.Cx, datainfo.Cy);
+
+        // 进行泰勒插值
+        taylorModel.applyInterpolation(datapoints, datapoint_result, datainfo.Cutoff);
+
+        // 反归一化数据
+        taylorModel.Denormalize(datapoints);
+        taylorModel.Denormalize(datapoint_result);
         ui->textBrowser->append("计算完成！");
         QCoreApplication::processEvents();
         auto end = std::chrono::high_resolution_clock::now(); // 获取当前时间点
@@ -276,23 +279,27 @@ void ReferenceMap::on_pushButton_clicked()
         ui->textBrowser->append(outstr+"\n");
         ui->textBrowser->append("结果正在保存与输出...");
         QCoreApplication::processEvents();
+        // taylor.DeNormalize(datapoint_result);
         readdata.resultOut(datapoint_result, s);
         QMessageBox::information(this,"已成功保存","已成功保存在" + QString::fromStdString(s),QMessageBox::Ok);
-        double rms = calculateRMS(datapoints,datapoint_result);
+//        double rms = calculateRMS(datapoints,datapoint_result);
         ui->textBrowser->append("基于泰勒多项式方法结果计算完成\n");
-        ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
+        QCoreApplication::processEvents();
+//        ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
         // 更新主界面的树
         emit treeUpdated(1);
         //
         draw_Form *draw_form_ = new draw_Form;
         QVector<double> xx,yy,zz;
         draw_form_->create_xyz_f(QString::fromStdString(s),xx,yy,zz);
-        draw_form_->set_heatMapView(xx,yy,zz);
+        draw_form_->autoset_heatMapView(xx,yy,zz);
+        draw_form_->setMapStep(dx,dy);
         if(draw_form_->magWarn == false)
             return;
-        draw_form_->set_ContourView(QString::fromStdString(s));
+        draw_form_->autoset_contourView(xx,yy,zz);
         ui->widget_pic0->layout()->addWidget(draw_form_);
-
+        ui->textBrowser->append("结果图已生成\n");
+        QCoreApplication::processEvents();
 
 
         break;
@@ -330,44 +337,51 @@ void ReferenceMap::on_pushButton_clicked()
         readdata.interval = sparse_para * 10;
 
         Geomagnetic::LegendreModel legendre;
-        std::string s = projectPath.toStdString()+"/Processed/"+filename.toStdString();
+        std::string s = filename.toStdString();
         datainfo.N = para1;
-        readdata.selectLineData(datapoints, datapoint_sparse, readdata.interval);
-        datapoint_result = datapoints;
-        readdata.DataSet(datapoint_sparse, datainfo);
+        readdata.createGridData(datapoints,datapoint_result,dx,dy);
+        legendre.setMinMax(datapoints);
+        legendre.Normalize(datapoints);
+        legendre.Normalize(datapoint_result);
+        // readdata.selectLineData(datapoints, datapoint_sparse, readdata.interval);
+        // datapoint_result = datapoints;
+        readdata.DataSet(datapoints, datainfo);
         for (auto& elem : datapoint_result)
             elem.second.tMagnetic = 0;
         ui->textBrowser->append("正在初始化...");
         QCoreApplication::processEvents();
-        legendre.init(datainfo,datapoint_sparse);
+        legendre.applyInterpolation(datapoints, datapoint_result, datainfo.N);
         ui->textBrowser->append("正在进行归一化处理...");
         QCoreApplication::processEvents();
-        legendre.NormalizedCalculation(datapoint_sparse,datapoint_result);
+        legendre.Denormalize(datapoints);
+        legendre.Denormalize(datapoint_result);
         ui->textBrowser->append("正在计算勒让德矩阵...");
         QCoreApplication::processEvents();
-        legendre.ComputeLegendreMatrix(datainfo, datapoint_sparse);
         ui->textBrowser->append("正在计算结果...");
         QCoreApplication::processEvents();
-        legendre.Result(datainfo, datapoint_result);
         ui->textBrowser->append("结果正在保存与输出...");
         QCoreApplication::processEvents();
         readdata.resultOut(datapoint_result, s);
         QMessageBox::information(this,"已成功保存","已成功保存在" + QString::fromStdString(s),QMessageBox::Ok);
         ui->textBrowser->append("基于勒让德多项式方法结果计算完成\n");
         QCoreApplication::processEvents();
-        double rms = calculateRMS(datapoints,datapoint_result);
-        ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
+        // double rms = calculateRMS(datapoints,datapoint_result);
+        // ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
+        //
+        emit treeUpdated(1);
         //
         draw_Form *draw_form_ = new draw_Form;
         QVector<double> xx,yy,zz;
         draw_form_->create_xyz_f(QString::fromStdString(s),xx,yy,zz);
-        draw_form_->set_heatMapView(xx,yy,zz);
+        draw_form_->autoset_heatMapView(xx,yy,zz);
+        draw_form_->setMapStep(dx,dy);
         if(draw_form_->magWarn == false)
             return;
-        draw_form_->set_ContourView(QString::fromStdString(s));
+        draw_form_->autoset_contourView(xx,yy,zz);
         ui->widget_pic1->layout()->addWidget(draw_form_);
-        // 更新主界面的树
-        emit treeUpdated(1);
+        ui->textBrowser->append("结果图已生成\n");
+        QCoreApplication::processEvents();
+
         break;
     }
     case 2: // polyhedral
@@ -397,65 +411,126 @@ void ReferenceMap::on_pushButton_clicked()
             QMessageBox::warning(nullptr, "错误", "未选择保存路径!");
             return;
         }
-        // 设置参数
-        Geomagnetic::Datapoint datapoints;                      // 当前选中的数据,原始数据
-        Geomagnetic::Datapoint datapoint_sparse;                // 抽稀后的数据
-        Geomagnetic::Datapoint datapoint_result;                // 计算后的数据
-        Geomagnetic::ReadData readdata;
-        Geomagnetic::Datainfo datainfo;
+        try {
+            // 设置参数
+            Geomagnetic::Datapoint datapoints;                      // 原始数据
+            Geomagnetic::Datapoint datapoint_sparse;
+            Geomagnetic::Datapoint datapoint_result;                // 计算后的数据
+            Geomagnetic::ReadData readdata;
+            Geomagnetic::Datainfo datainfo;
+            Geomagnetic::Polyhedral poly;
+            Geomagnetic::OptimizedCubicInterpolator oci;
+            // 读取数据
+            ui->textBrowser->append("正在读取数据...");
+            QCoreApplication::processEvents();
+            readdata.readGridFromFile(str, datapoints);
+            // 数据集大小检查与警告
+            if (datapoints.size() > 10000) {
+                QMessageBox::StandardButton reply;
+                reply = QMessageBox::question(nullptr, "大数据集警告",
+                                              QString("数据点数量(%1)较大，计算可能需要较长时间和大量内存。是否继续?").arg(datapoints.size()),
+                                              QMessageBox::Yes|QMessageBox::No);
 
-        readdata.readGridFromFile(str,datapoints);
-        readdata.interval = sparse_para * 10;
+                if (reply == QMessageBox::No) {
+                    ui->textBrowser->append("<p style='color:red;'>操作已取消</p>");
+                    return;
+                }
+                else {
+                    readdata.selectRandomData(datapoints, datapoint_sparse, sparse_para);
+                }
+            }
+            else
+                datapoint_sparse = datapoints;
 
-        Geomagnetic::Polyhedral poly;
-        std::string s=projectPath.toStdString()+"/Processed/"+filename.toStdString();
-        datainfo.PolyQ = paraModel;
-        datainfo.sigma2 = para2;
-        readdata.selectLineData(datapoints, datapoint_sparse, readdata.interval);
-        datapoint_result = datapoints;
-        readdata.DataSet(datapoint_sparse, datainfo);
-        for (auto& elem : datapoint_result)
-            elem.second.tMagnetic = 0;
-        auto start = std::chrono::high_resolution_clock::now(); // 获取当前时间点
-        ui->textBrowser->append("正在初始化...");
-        QCoreApplication::processEvents();
-        poly.init(datainfo, datapoint_sparse);
-        ui->textBrowser->append("正在计算Q矩阵...");
-        QCoreApplication::processEvents();
-        poly.ComputeQ(datainfo, datapoint_sparse);
-        ui->textBrowser->append("正在计算X矩阵...");
-        QCoreApplication::processEvents();
-        poly.ComputeX(datainfo, datapoint_sparse);
-        ui->textBrowser->append("正在计算结果...");
-        QCoreApplication::processEvents();
-        poly.Result(datainfo, datapoint_result,datapoint_sparse);
-        auto end = std::chrono::high_resolution_clock::now(); // 获取当前时间点
-        std::chrono::duration<double> elapsed = end - start;
-        QString outstr = "多面函数处理时间: " + QString::number(elapsed.count()) + "s";
-        ui->textBrowser->append("<p style='color:blue;'>"+outstr+"</p>");
-        QCoreApplication::processEvents();
-        ui->textBrowser->append("结果正在保存与输出...");
-        QCoreApplication::processEvents();
-        readdata.resultOut(datapoint_result, s);
-        //
-        draw_Form *draw_form_ = new draw_Form;
-        QVector<double> xx,yy,zz;
-        draw_form_->create_xyz_f(QString::fromStdString(s),xx,yy,zz);
-        draw_form_->set_heatMapView(xx,yy,zz);
-        if(draw_form_->magWarn == false)
-            return;
-        draw_form_->set_ContourView(QString::fromStdString(s));
-        ui->widget_pic2->layout()->addWidget(draw_form_);
-        //
-        QMessageBox::information(this,"已成功保存","已成功保存在" + QString::fromStdString(s),QMessageBox::Ok);
-        ui->textBrowser->append("基于多面函数方法结果计算完成\n");
-        QCoreApplication::processEvents();
-        double rms = calculateRMS(datapoints,datapoint_result);
-        ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
-        // 更新主界面的树
-        emit treeUpdated(1);
+            // 设置参数
+            readdata.interval = sparse_para * 10;
+            datainfo.PolyQ = paraModel;
+            datainfo.sigma2 = para2;
+            readdata.createGridData(datapoint_sparse, datapoint_result, dx, dy);
+            readdata.DataSet(datapoint_sparse, datainfo);
+
+            // 初始化结果点磁场值
+            for (auto& elem : datapoint_result)
+                elem.second.tMagnetic = 0;
+
+            // 计时开始
+            auto start = std::chrono::high_resolution_clock::now();
+
+
+            // 执行计算流程
+            QThread::msleep(100);
+            ui->textBrowser->append("正在初始化...");
+            QCoreApplication::processEvents();
+            //休眠100ms
+            QThread::msleep(100);
+            poly.init(datainfo, datapoint_sparse);
+
+            ui->textBrowser->append("正在计算Q矩阵...");
+            QCoreApplication::processEvents();
+            QThread::msleep(100);
+            poly.ComputeQ(datainfo, datapoint_sparse);
+
+            QThread::msleep(100);
+            ui->textBrowser->append("正在计算X矩阵...");
+            QCoreApplication::processEvents();
+            QThread::msleep(100);
+            try {
+                poly.ComputeX(datainfo, datapoint_sparse);
+            }
+            catch (const std::bad_alloc& e) {
+                ui->textBrowser->append("<p style='color:red;'>内存不足，无法完成计算。尝试减少数据量或增加系统内存。</p>");
+                QMessageBox::critical(nullptr, "内存错误", "计算过程中内存不足，请减少数据量或增加系统内存。");
+                return;
+            }
+
+            ui->textBrowser->append("正在计算结果...");
+            QCoreApplication::processEvents();
+            poly.Result(datainfo, datapoint_result, datapoint_sparse);
+
+            // 计时结束
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsed = end - start;
+            QString outstr = "多面函数处理时间: " + QString::number(elapsed.count()) + "s";
+            ui->textBrowser->append("<p style='color:blue;'>"+outstr+"</p>");
+            QCoreApplication::processEvents();
+
+            // 保存结果
+            ui->textBrowser->append("结果正在保存与输出...");
+            QCoreApplication::processEvents();
+            std::string s = filename.toStdString();
+            // poly.DeNormalize(datapoint_result);
+            readdata.resultOut(datapoint_result, s);
+            ui->textBrowser->append("结果已保存至: " + QString::fromStdString(s));
+
+            // 更新树
+            emit treeUpdated(1);
+
+            // 可视化结果
+            ui->textBrowser->append("正在生成可视化结果...");
+            QCoreApplication::processEvents();
+            draw_Form *draw_form_ = new draw_Form;
+            QVector<double> xx, yy, zz;
+            draw_form_->create_xyz_f(QString::fromStdString(s), xx, yy, zz);
+            draw_form_->autoset_heatMapView(xx, yy, zz);
+            draw_form_->setMapStep(dx, dy);
+
+            if(draw_form_->magWarn == false) {
+                ui->textBrowser->append("<p style='color:red;'>警告：可视化过程出现问题</p>");
+                return;
+            }
+
+            draw_form_->autoset_contourView(xx, yy, zz);
+            ui->widget_pic2->layout()->addWidget(draw_form_);
+            ui->textBrowser->append("<p style='color:green;'>计算完成，结果图已生成</p>");
+            QCoreApplication::processEvents();
+        }
+        catch (const std::exception& e) {
+            ui->textBrowser->append("<p style='color:red;'>处理过程中出现错误: " + QString(e.what()) + "</p>");
+            QMessageBox::critical(nullptr, "错误", "处理过程中出现异常: " + QString(e.what()));
+        }
         break;
     }
+
     case 3: // spline
     {
         QLayout *lay = ui->widget_pic3->layout();
@@ -481,32 +556,54 @@ void ReferenceMap::on_pushButton_clicked()
 
         // 设置参数
         Geomagnetic::Datapoint datapoints;                      // 当前选中的数据,原始数据
-        Geomagnetic::Datapoint datapoint_sparse;                // 抽稀后的数据
         Geomagnetic::Datapoint datapoint_result;                // 计算后的数据
+        Geomagnetic::Datapoint datapoint_sparse;                // 抽稀后的数据
         Geomagnetic::ReadData readdata;
         Geomagnetic::Datainfo datainfo;
 
         readdata.readGridFromFile(str,datapoints);
+        if (datapoints.size() > 10000) {
+            QMessageBox::StandardButton reply;
+            reply = QMessageBox::question(nullptr, "大数据集警告",
+                                          QString("数据点数量(%1)较大，计算可能需要较长时间和大量内存。是否继续?").arg(datapoints.size()),
+                                          QMessageBox::Yes|QMessageBox::No);
+
+            if (reply == QMessageBox::No) {
+                ui->textBrowser->append("<p style='color:red;'>操作已取消</p>");
+                return;
+            }
+            else {
+                readdata.selectRandomData(datapoints, datapoint_sparse, sparse_para);
+            }
+        }
+        else
+            datapoint_sparse = datapoints;
+
         readdata.interval = sparse_para * 10;
-        Geomagnetic::Splinecurve spline;
-        std::string s=projectPath.toStdString()+"/Processed/"+filename.toStdString();
+        Geomagnetic::Splinecurve spline;  // 50个最近邻点，epsilon=1e-10
+        std::string s=filename.toStdString();
 
         datainfo.E= para3_0;
         datainfo.C = para3_1;
-        readdata.selectLineData(datapoints, datapoint_sparse, readdata.interval);
-        datapoint_result = datapoints;
+        readdata.createGridData(datapoint_sparse, datapoint_result, dx, dy);
         readdata.DataSet(datapoint_sparse, datainfo);
+
+        // 初始化结果点磁场值
         for (auto& elem : datapoint_result)
             elem.second.tMagnetic = 0;
+
         ui->textBrowser->append("正在初始化...");
         QCoreApplication::processEvents();
         spline.init(datainfo, datapoint_sparse);
+
         ui->textBrowser->append("正在计算X矩阵...");
         QCoreApplication::processEvents();
         spline.ComputeX(datapoint_sparse);
+
         ui->textBrowser->append("正在计算结果...");
         QCoreApplication::processEvents();
         spline.Result(datapoint_result, datapoint_sparse);
+
         ui->textBrowser->append("结果正在保存与输出...");
         QCoreApplication::processEvents();
         readdata.resultOut(datapoint_result, s);
@@ -514,17 +611,17 @@ void ReferenceMap::on_pushButton_clicked()
         draw_Form *draw_form_ = new draw_Form;
         QVector<double> xx,yy,zz;
         draw_form_->create_xyz_f(QString::fromStdString(s),xx,yy,zz);
-        draw_form_->set_heatMapView(xx,yy,zz);
+        draw_form_->autoset_heatMapView(xx,yy,zz);
         if(draw_form_->magWarn == false)
             return;
-        draw_form_->set_ContourView(QString::fromStdString(s));
+        draw_form_->autoset_contourView(xx,yy,zz);
         ui->widget_pic3->layout()->addWidget(draw_form_);
         //
         QMessageBox::information(this,"已成功保存","已成功保存在" + QString::fromStdString(s),QMessageBox::Ok);
         ui->textBrowser->append("基于样条曲线方法结果计算完成");
         QCoreApplication::processEvents();
-        double rms = calculateRMS(datapoints,datapoint_result);
-        ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
+        // double rms = calculateRMS(datapoints,datapoint_result);
+        // ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
         // 更新主界面的树
         emit treeUpdated(1);
         break;
@@ -593,10 +690,10 @@ void ReferenceMap::on_pushButton_clicked()
         draw_Form *draw_form_ = new draw_Form;
         QVector<double> xx,yy,zz;
         draw_form_->create_xyz_f(s,xx,yy,zz);
-        draw_form_->set_heatMapView(xx,yy,zz);
+        draw_form_->autoset_heatMapView(xx,yy,zz);
         if(draw_form_->magWarn == false)
             return;
-        draw_form_->set_ContourView(s);
+        draw_form_->autoset_contourView(xx,yy,zz);
         ui->widget_pic4->layout()->addWidget(draw_form_);
         // 更新主界面的树
         emit treeUpdated(1);
@@ -648,10 +745,10 @@ void ReferenceMap::on_pushButton_clicked()
         draw_Form *draw_form_ = new draw_Form;
         QVector<double> xx,yy,zz;
         draw_form_->create_xyz_f(s,xx,yy,zz);
-        draw_form_->set_heatMapView(xx,yy,zz);
+        draw_form_->autoset_heatMapView(xx,yy,zz);
         if(draw_form_->magWarn == false)
             return;
-        draw_form_->set_ContourView(s);
+        draw_form_->autoset_contourView(xx,yy,zz);
         ui->widget_pic5->layout()->addWidget(draw_form_);
         ui->textBrowser->append("计算完成！");
         QCoreApplication::processEvents();
@@ -667,4 +764,20 @@ void ReferenceMap::on_pushButton_clicked()
 }
 
 
+
+
+void ReferenceMap::on_pushButton_2_clicked()
+{
+    QString currentDir = ui->lineEdit_savePath->text();
+    if (currentDir.isEmpty()) {
+        currentDir = QDir::homePath();
+    }
+    QString selectedFile = QFileDialog::getSaveFileName(this,
+                                                        tr("保存计算结果"), currentDir,
+                                                        tr("文本文件 (*.txt);;CSV文件 (*.csv);;所有文件 (*.*)"));
+
+    if (!selectedFile.isEmpty()) {
+        ui->lineEdit_savePath->setText(selectedFile);
+    }
+}
 

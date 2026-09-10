@@ -26,13 +26,13 @@ void readFile::read_file(std::vector<double>&X, std::vector<double>& Y, std::vec
 		double B = 0;
 		double L = 0;
         std::istringstream sline(line);
-		getline(sline, tmp, ' ');// ¶ÁÈëX
+		getline(sline, tmp, ' ');// è¯»å…¥X
 		Xi = stod(tmp);
 		X.push_back(Xi);
-		getline(sline, tmp, ' ');// ¶ÁÈëY
+		getline(sline, tmp, ' ');// è¯»å…¥Y
 		Yi = stod(tmp);
 		Y.push_back(Yi);
-		getline(sline, tmp, ' ');// ¶ÁÈëT
+		getline(sline, tmp, ' ');// è¯»å…¥T
 		Ti = stod(tmp);
 		T.push_back(Ti);
 	}
@@ -52,7 +52,7 @@ void readFile::setValue_i(int& a, int b)
 
 void readFile::readfile_run(std::string infile)
 {
-	//¶ÁÈëÎÄ¼ş
+	//è¯»å…¥æ–‡ä»¶
 	read_file(X, Y, T, infile);
 
 }

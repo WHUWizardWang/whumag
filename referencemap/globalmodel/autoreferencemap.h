@@ -41,6 +41,10 @@ private slots:
     void on_pushButton_clicked();                               // 点击处理按钮，进行建模
     void on_comboBox_height_currentIndexChanged(int index);
 
+    void on_pushButton_save_clicked();
+
+    void on_comboBox_height_currentTextChanged(const QString &arg1);
+
 private:
     Ui::AutoReferenceMap *ui;
     bool loadResourceFile();      // 加载资源文件

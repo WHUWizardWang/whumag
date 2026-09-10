@@ -37,6 +37,8 @@ constexpr auto DEBUG = 0;
 		double Y;
 		double Z=0;
 
+        int index = 0;
+
 	}; 
 	//The structure of the read data
     typedef std::map<int, SinglePoint> Datapoint;

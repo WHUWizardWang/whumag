@@ -11,106 +11,95 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>基于稀疏磁测数据地磁基准图高效构建软件</string>
+   <string>基于稀疏磁测数据的地磁基准图高效构建系统V1.2</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout_2">
-    <item>
-     <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,5">
-      <property name="spacing">
-       <number>2</number>
+   <layout class="QGridLayout" name="gridLayout" rowstretch="3,1" columnstretch="1,4">
+    <item row="0" column="1">
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="currentIndex">
+       <number>1</number>
       </property>
-      <item>
-       <widget class="QTreeWidget" name="treeWidget">
-        <attribute name="headerVisible">
-         <bool>false</bool>
-        </attribute>
-        <column>
-         <property name="text">
-          <string notr="true">1</string>
-         </property>
-        </column>
-       </widget>
-      </item>
-      <item>
-       <layout class="QVBoxLayout" name="verticalLayout" stretch="4,1">
+      <widget class="QWidget" name="tab_image">
+       <attribute name="title">
+        <string>图形显示</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_3">
         <property name="spacing">
-         <number>1</number>
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
         </property>
         <item>
-         <widget class="QTabWidget" name="tabWidget">
-          <property name="currentIndex">
+         <layout class="QHBoxLayout" name="horizontalLayout_2">
+          <property name="spacing">
            <number>0</number>
           </property>
-          <widget class="QWidget" name="tab_image">
-           <attribute name="title">
-            <string>图形显示</string>
-           </attribute>
-           <layout class="QHBoxLayout" name="horizontalLayout_3">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_2">
-              <property name="spacing">
-               <number>0</number>
-              </property>
-             </layout>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="tab_3d">
-           <attribute name="title">
-            <string>三维显示</string>
-           </attribute>
-           <layout class="QHBoxLayout" name="horizontalLayout_5">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <layout class="QHBoxLayout" name="horizontalLayout_4">
-              <property name="spacing">
-               <number>0</number>
-              </property>
-              <item>
-               <widget class="OmgGLWidget" name="widget" native="true"/>
-              </item>
-             </layout>
-            </item>
-           </layout>
-          </widget>
-         </widget>
-        </item>
-        <item>
-         <widget class="QTextBrowser" name="textBrowser"/>
+         </layout>
         </item>
        </layout>
-      </item>
-     </layout>
+      </widget>
+      <widget class="QWidget" name="tab_3d">
+       <attribute name="title">
+        <string>三维显示</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_5">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="OmgGLWidget" name="widget" native="true"/>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+    <item row="0" column="0">
+     <widget class="QTreeWidget" name="treeWidget">
+      <attribute name="headerVisible">
+       <bool>false</bool>
+      </attribute>
+      <column>
+       <property name="text">
+        <string notr="true">1</string>
+       </property>
+      </column>
+     </widget>
+    </item>
+    <item row="1" column="0">
+     <widget class="QListWidget" name="taskListWidget"/>
+    </item>
+    <item row="1" column="1">
+     <widget class="QTextBrowser" name="textBrowser"/>
     </item>
    </layout>
   </widget>
@@ -120,7 +109,7 @@
      <x>0</x>
      <y>0</y>
      <width>1171</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">
@@ -183,7 +172,7 @@
      </property>
      <widget class="QMenu" name="menu_8">
       <property name="title">
-       <string>复杂度计算</string>
+       <string>测线间距规划</string>
       </property>
       <addaction name="action_shuimian"/>
       <addaction name="action_kongzhong"/>
@@ -487,17 +476,17 @@
   </action>
   <action name="action_3">
    <property name="text">
-    <string>测线间距计算</string>
+    <string>复杂度计算</string>
    </property>
   </action>
   <action name="action_shuimian">
    <property name="text">
-    <string>水面复杂度计算</string>
+    <string>水面测线间距计算</string>
    </property>
   </action>
   <action name="action_kongzhong">
    <property name="text">
-    <string>空中复杂度计算</string>
+    <string>空中测线间距计算</string>
    </property>
   </action>
   <action name="action_auto">

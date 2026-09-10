@@ -59,60 +59,62 @@
              </property>
              <item>
               <layout class="QGridLayout" name="gridLayout_2">
-               <item row="2" column="1">
-                <widget class="QLabel" name="label_6">
-                 <property name="text">
-                  <string>纬度(Y)</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="4" column="0">
+               <item row="7" column="0">
                 <widget class="QLabel" name="label_3">
                  <property name="text">
                   <string>保存路径：</string>
                  </property>
                 </widget>
                </item>
-               <item row="1" column="2">
-                <widget class="QDoubleSpinBox" name="doubleSpinBox_dx">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>80</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
-                 <property name="value">
-                  <double>0.500000000000000</double>
+               <item row="1" column="0">
+                <widget class="QLabel" name="label">
+                 <property name="text">
+                  <string>选择低空数据：</string>
                  </property>
                 </widget>
                </item>
-               <item row="0" column="1" colspan="2">
-                <widget class="QComboBox" name="comboBox_data"/>
-               </item>
-               <item row="3" column="1">
-                <widget class="QComboBox" name="comboBox_height"/>
-               </item>
-               <item row="3" column="0">
+               <item row="6" column="0">
                 <widget class="QLabel" name="label_4">
                  <property name="text">
                   <string>建图高度：</string>
                  </property>
                 </widget>
                </item>
-               <item row="2" column="0">
-                <widget class="QLabel" name="label_5">
+               <item row="0" column="1">
+                <widget class="QComboBox" name="comboBox_data"/>
+               </item>
+               <item row="1" column="1">
+                <widget class="QComboBox" name="comboBox_airdata"/>
+               </item>
+               <item row="6" column="2">
+                <widget class="QLabel" name="label_8">
                  <property name="text">
-                  <string>插值分辨率(km)：</string>
+                  <string>KM</string>
                  </property>
                 </widget>
                </item>
-               <item row="2" column="2">
+               <item row="5" column="1">
+                <widget class="QLabel" name="label_6">
+                 <property name="text">
+                  <string>纬度(Y)</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="5" column="0">
+                <widget class="QLabel" name="label_5">
+                 <property name="text">
+                  <string>插值分辨率：</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="7" column="2">
+                <widget class="QPushButton" name="pushButton_save">
+                 <property name="text">
+                  <string>浏览</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="5" column="2">
                 <widget class="QDoubleSpinBox" name="doubleSpinBox_dy">
                  <property name="enabled">
                   <bool>true</bool>
@@ -129,25 +131,11 @@
                    <height>16777215</height>
                   </size>
                  </property>
+                 <property name="decimals">
+                  <number>5</number>
+                 </property>
                  <property name="value">
                   <double>0.500000000000000</double>
-                 </property>
-                </widget>
-               </item>
-               <item row="4" column="1" colspan="2">
-                <widget class="txtLineEdit" name="lineEdit_savePath"/>
-               </item>
-               <item row="3" column="2">
-                <widget class="QLabel" name="label_8">
-                 <property name="text">
-                  <string>KM</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="1" column="0">
-                <widget class="QLabel" name="label_11">
-                 <property name="text">
-                  <string>插值分辨率(km)</string>
                  </property>
                 </widget>
                </item>
@@ -166,14 +154,49 @@
                   </size>
                  </property>
                  <property name="text">
-                  <string>选择数据：</string>
+                  <string>选择水面数据：</string>
                  </property>
                 </widget>
                </item>
-               <item row="1" column="1">
+               <item row="7" column="1">
+                <widget class="txtLineEdit" name="lineEdit_savePath"/>
+               </item>
+               <item row="3" column="1">
                 <widget class="QLabel" name="label_7">
                  <property name="text">
                   <string>经度(X)</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="6" column="1">
+                <widget class="QComboBox" name="comboBox_height"/>
+               </item>
+               <item row="3" column="0">
+                <widget class="QLabel" name="label_11">
+                 <property name="text">
+                  <string>插值分辨率:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="3" column="2">
+                <widget class="QDoubleSpinBox" name="doubleSpinBox_dx">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>80</width>
+                   <height>16777215</height>
+                  </size>
+                 </property>
+                 <property name="decimals">
+                  <number>5</number>
+                 </property>
+                 <property name="value">
+                  <double>0.500000000000000</double>
                  </property>
                 </widget>
                </item>
@@ -239,7 +262,7 @@
           <item>
            <widget class="QPushButton" name="pushButton">
             <property name="text">
-             <string>处理</string>
+             <string>智能处理</string>
             </property>
            </widget>
           </item>
@@ -269,7 +292,7 @@
       </widget>
      </item>
      <item>
-      <layout class="QVBoxLayout" name="verticalLayout_pic" stretch="2,2,2,2,1">
+      <layout class="QVBoxLayout" name="verticalLayout_pic" stretch="2,2,2,2,2,1">
        <item>
         <widget class="QWidget" name="widget_pic3" native="true">
          <layout class="QHBoxLayout" name="horizontalLayout_10"/>
@@ -295,6 +318,9 @@
          </property>
          <layout class="QHBoxLayout" name="horizontalLayout_8"/>
         </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="widght_pic4" native="true"/>
        </item>
        <item>
         <widget class="QTextBrowser" name="textBrowser">

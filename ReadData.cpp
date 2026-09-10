@@ -15,6 +15,8 @@ namespace Geomagnetic {
 
 
     const double pi = 3.1415926535;
+    constexpr double EARTH_RADIUS = 6378137.0; // WGS84椭球体的赤道半径(米)
+
     // Convert calendar date to Julian Date
     double TimeTrans::calendarDateToJulianDate(int year, int month, int day, int hour, int minute, int second) {
         // The algorithm for converting a calendar date to a Julian Date
@@ -186,7 +188,7 @@ namespace Geomagnetic {
                 point.lon = X;
                 point.lat = Y;
 
-                datapoints.insert(std::make_pair(index++, point));
+                datapoints.insert(std::make_pair(index, point));
                 validLines++;
                 hasData = true;
             } else {
@@ -229,7 +231,7 @@ namespace Geomagnetic {
         datainfo.Clon = totalLon / datainfo.DataNum;
         datainfo.Clat = totalLat / datainfo.DataNum;
     }
-    void ReadData::selectRandomData(const Datapoint& allData, Datapoint& train, Datapoint& test) {
+    void ReadData::selectRandomData(const Datapoint& allData, Datapoint& data_sparse, int n) {
         // 设置随机数生成器
         std::random_device rd;
         std::mt19937 g(rd());
@@ -243,19 +245,9 @@ namespace Geomagnetic {
 
         // 打乱键的顺序
         shuffle(keys.begin(), keys.end(), g);
-
-        // 选取前5000个键值对作为训练数据
-        for (size_t i = 0; i < 100 && i < keys.size(); ++i) {
-            train[keys[i]] = allData.at(keys[i]);
-        }
-
-        // 选取接下来的5000个键值对作为测试数据
-        for (size_t i = 100;  i < 200; ++i) {
-            
-            SinglePoint temp = allData.at(keys[i]);
-//            temp.tMagnetic = 0;
-//            cout << keys[i] << temp.tMagnetic;
-            test[keys[i]] = temp;
+        int count = keys.size() / n;
+        for (size_t i = 0; i < count && i < keys.size(); ++i) {
+            data_sparse[keys[i]] = allData.at(keys[i]);
         }
     }
     void ReadData::selectLineData(const Datapoint& allData, Datapoint& train, int n)
@@ -294,8 +286,8 @@ namespace Geomagnetic {
         for (const auto& pair : dataresult)
         {
             const SinglePoint& point = pair.second;
-            outputFile << point.X << " "
-                << point.Y << " "
+            outputFile << point.X << ","
+                << point.Y << ","
                 << point.tMagnetic << std::endl;
         }
 
@@ -315,7 +307,18 @@ namespace Geomagnetic {
         outputFile1.close();
         std::cout << "数据已成功写入文件 " << filename << std::endl;
     }
-    
+    void ReadData::getDatarowcol(std::vector<double>X, std::vector<double>Y, std::vector<double>T, int& row, int& col,double step_x,double step_y)
+    {
+        double minX = *std::min_element(X.begin(), X.end());
+        double maxX = *std::max_element(X.begin(), X.end());
+        double minY = *std::min_element(Y.begin(), Y.end());
+        double maxY = *std::max_element(Y.begin(), Y.end());
+
+        // 计算行数和列数
+        row = static_cast<int>((maxY - minY) / step_y) + 1;
+        col = static_cast<int>((maxX - minX) / step_x) + 1;
+
+    }
     void CoordTrans::BLH2XYZ(Datapoint& datapoint)
     {
         double a = 6378137.0;         // 参考椭球的长半轴, 单位 m
@@ -363,6 +366,20 @@ namespace Geomagnetic {
             //假设已知height，实际中需要根据XYZ计算
             double N = a / sqrt(1 - e2 * sin(B) * sin(B));
             temp.height = p / cos(B) - N;
+        }
+    }
+    void CoordTrans::BL2XY(Datapoint& datapoint)
+    {
+        double a = 6378137.0;         // 参考椭球的长半轴, 单位 m
+        double b = 6356752.31414;    // 参考椭球的短半轴, 单位 m
+        double e2 = (a * a - b * b) / (a * a);
+        for (auto& elem : datapoint)
+        {
+            double B = (elem.second.lat) * pi / 180;
+            double L = (elem.second.lon) * pi / 180;
+            double N = a / sqrt(1 - e2 * sin(B) * sin(B));
+            elem.second.X = N * cos(B) * cos(L);
+            elem.second.Y = N * cos(B) * sin(L);
         }
     }
     void ReadData::selectLineData(const Datapoint& allData, Datapoint& train, Datapoint& all,int n)
@@ -441,8 +458,8 @@ namespace Geomagnetic {
         m4 = N / 24.0 * sin(B) * pow(cos(B), 3) * (5 - t * t + 9 * n);
         m5 = N / 120.0 * pow(cos(B), 5) * (5 - 18 * t * t + pow(t, 4) + 14 * n - 58 * n * t * t);
         m6 = N / 720.0 * sin(B) * pow(cos(B), 5) * (61 - 58 * t * t + pow(t, 4));
-        x0 = Xz + m2 * l * l / pow(p0, 2) + m4 * pow(l, 4) / pow(p0, 4) + m6 * pow(l, 6) / pow(p0, 6);
-        y0 = m1 * l / p0 + m3 * pow(l, 3) / pow(p0, 3) + m5 * pow(l, 5) / pow(p0, 5);   //计算x y坐标
+        x0 = Xz + m2 * l * l / pow(p_0, 2) + m4 * pow(l, 4) / pow(p_0, 4) + m6 * pow(l, 6) / pow(p_0, 6);
+        y0 = m1 * l / p_0 + m3 * pow(l, 3) / pow(p_0, 3) + m5 * pow(l, 5) / pow(p_0, 5);   //计算x y坐标
 
         x = x0;
         //double y = y0 + 500000 + 1000000 * L_num;    //化为国家统一坐标
@@ -590,7 +607,58 @@ namespace Geomagnetic {
         file.close();
         return 0;
     }
+    bool ReadData::createGridData(const Datapoint& datapoints, Datapoint& dataresult, double dx, double dy)
+    {
+        // 清空原有数据
+        dataresult.clear();
+        if (datapoints.empty())
+        {
+            std::cerr << "无法创建网格数据，原始数据为空！" << std::endl;
+            return false;
+        }
 
+        // 获得datapoints的经纬度最大值最小值
+        double xMax = std::numeric_limits<double>::min();
+        double xMin = std::numeric_limits<double>::max();
+        double yMax = std::numeric_limits<double>::min();
+        double yMin = std::numeric_limits<double>::max();
+        for (const auto& elem : datapoints)
+        {
+            xMax = std::max(xMax, elem.second.X);
+            xMin = std::min(xMin, elem.second.X);
+            yMax = std::max(yMax, elem.second.Y);
+            yMin = std::min(yMin, elem.second.Y);
+        }
+
+        // 计算网格点数量
+        int nx = static_cast<int>((xMax - xMin) / dx) + 1;
+        int ny = static_cast<int>((yMax - yMin) / dy) + 1;
+
+        // 使用整数索引创建网格，避免浮点数精度问题
+        for (int i = 0; i < nx; ++i)
+        {
+            double x = xMin + i * dx;
+            for (int j = 0; j < ny; ++j)
+            {
+                double y = yMin + j * dy;
+
+                SinglePoint point;
+                point.X = x;
+                point.lat = x;
+                point.Y = y;
+                point.lon = y;
+                point.tMagnetic = 0;
+                dataresult.insert(std::make_pair(dataresult.size(), point));
+            }
+        }
+
+        // 输出调试信息
+        std::cout << "网格创建: " << nx << " x " << ny << " = " << dataresult.size() << " 点" << std::endl;
+        std::cout << "X范围: " << xMin << " 到 " << xMax << ", 步长: " << dx << std::endl;
+        std::cout << "Y范围: " << yMin << " 到 " << yMax << ", 步长: " << dy << std::endl;
+
+        return true;
+    }
 
     Datapoint ReadData::setDataResult(Datapoint& datapoint, double interval)
     {

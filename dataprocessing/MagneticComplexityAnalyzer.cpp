@@ -1,4 +1,5 @@
 ﻿#include "MagneticComplexityAnalyzer.h" // 包含头文件
+
 using namespace Geomagnetic;
 MagneticComplexityAnalyzer::MagneticComplexityAnalyzer()
     : SUBAREA_SIZE(15), FEATURE_COUNT(6)
@@ -140,7 +141,7 @@ ComplexityResult MagneticComplexityAnalyzer::analyzeComplexityChunked(
     // 初始化结果和准备网格数据
     ComplexityResult finalResult;
     finalResult.gridData = createGrid(data, gridSize);
-    interpolateEmptyGrids(finalResult.gridData);
+    //interpolateEmptyGrids(finalResult.gridData);
     calculateGridGradients(finalResult.gridData);
 
     const GridData& grid = finalResult.gridData;
@@ -654,89 +655,7 @@ void MagneticComplexityAnalyzer::showSpacingMap(const ComplexityResult& result, 
     plotDialog->show();
 }
 
-// 绘制热图 (可显示复杂度或测线间距)
-// void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
-//                                                    const ComplexityResult& result,
-//                                                    bool showSpacing)
-// {
-//     // 清除原有图形
-//     customPlot->clearPlottables();
 
-//     const GridData& gridData = result.gridData;
-
-//     // 创建颜色图对象
-//     QCPColorMap* colorMap = new QCPColorMap(customPlot->xAxis, customPlot->yAxis);
-
-//     // 设置颜色图大小
-//     int effectiveRows = gridData.rows - 30;  // 减去边缘的15*2行
-//     int effectiveCols = gridData.cols - 30;  // 减去边缘的15*2列
-//     colorMap->data()->setSize(effectiveCols, effectiveRows);
-//     colorMap->data()->setRange(QCPRange(15, gridData.cols-15), QCPRange(15, gridData.rows-15));
-
-//     // 设置合适的颜色渐变
-//     QCPColorGradient gradient;
-//     if (showSpacing) {
-//         // 测线间距的颜色方案 - 从小(红色)到大(蓝色)
-//         gradient = QCPColorGradient(QCPColorGradient::gpThermal);
-//     } else {
-//         // 复杂度的颜色方案 - 从低(蓝色)到高(红色)
-//         gradient = QCPColorGradient(QCPColorGradient::gpJet);
-//     }
-//     colorMap->setGradient(gradient);
-
-//     // 将值填入颜色图
-//     for (size_t i = 0; i < result.complexityValues.size(); i++) {
-//         int row = result.rowIndices[i];
-//         int col = result.colIndices[i];
-
-//         // 根据显示模式选择复杂度或测线间距
-//         double value = showSpacing ? result.spacingValues[i] : result.complexityValues[i];
-
-//         // 处理在有效范围内的点
-//         if (row >= 15 && row < gridData.rows-15 &&
-//             col >= 15 && col < gridData.cols-15) {
-//             colorMap->data()->setCell(col-15, row-15, value);
-//         }
-//     }
-
-//     // 添加一个颜色图例
-//     QCPColorScale* colorScale = new QCPColorScale(customPlot);
-//     customPlot->plotLayout()->addElement(0, 1, colorScale);
-//     colorScale->setType(QCPAxis::atRight);
-//     colorMap->setColorScale(colorScale);
-
-//     // 根据显示模式设置标签
-//     if (showSpacing) {
-//         colorScale->axis()->setLabel("建议测线间距 (km)");
-//     } else {
-//         colorScale->axis()->setLabel("磁场复杂度值");
-//     }
-
-//     // 添加标题
-//     customPlot->plotLayout()->insertRow(0);
-//     QCPTextElement* title = new QCPTextElement(customPlot);
-
-//     if (showSpacing) {
-//         title->setText("测线间距分布图");
-//     } else {
-//         title->setText("磁场复杂度分布图");
-//     }
-
-//     title->setFont(QFont("sans", 12, QFont::Bold));
-//     customPlot->plotLayout()->addElement(0, 0, title);
-
-//     // 设置轴标签
-//     customPlot->xAxis->setLabel("经度方向 (格网坐标)");
-//     customPlot->yAxis->setLabel("纬度方向 (格网坐标)");
-
-//     // 启用交互功能
-//     customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
-
-//     // 更新画布
-//     colorMap->rescaleDataRange();
-//     customPlot->rescaleAxes();
-//     customPlot->replot();
-// }
 void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
                                                    const ComplexityResult& result,
                                                    int jumpSize,
@@ -744,8 +663,11 @@ void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
 {
     // 清除原有图形
     customPlot->clearPlottables();
+    customPlot->clearItems();
 
     const GridData& gridData = result.gridData;
+    const double GAMMA = 0.3;        // 0.3–0.6 常用，<1 抬低值 >1 压高值
+
 
     // 创建颜色图对象
     QCPColorMap* colorMap = new QCPColorMap(customPlot->xAxis, customPlot->yAxis);
@@ -760,8 +682,23 @@ void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
         return;
     }
 
+    // 计算有效区域的实际地理坐标范围（去除边缘区域）
+    double lonRange = gridData.lonMax - gridData.lonMin;
+    double latRange = gridData.latMax - gridData.latMin;
+
+    // 计算每个网格单元对应的地理坐标步长
+    double lonStep = lonRange / gridData.cols;
+    double latStep = latRange / gridData.rows;
+
+    // 计算有效显示区域的地理坐标范围（排除jumpSize边缘）
+    double effectiveLonMin = gridData.lonMin + jumpSize * lonStep;
+    double effectiveLonMax = gridData.lonMax - jumpSize * lonStep;
+    double effectiveLatMin = gridData.latMin + jumpSize * latStep;
+    double effectiveLatMax = gridData.latMax - jumpSize * latStep;
+
+
     // 限制最大尺寸以防止性能问题
-    const int maxSize = 1000; // 最大尺寸限制
+    const int maxSize = 3000; // 最大尺寸限制
     int sampleStep = 1;
 
     if (effectiveRows > maxSize || effectiveCols > maxSize) {
@@ -776,21 +713,122 @@ void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
 
     // 设置实际颜色图尺寸
     colorMap->data()->setSize(effectiveCols, effectiveRows);
-    colorMap->data()->setRange(QCPRange(jumpSize, gridData.cols-jumpSize), QCPRange(jumpSize, gridData.rows-jumpSize));
+    colorMap->data()->setRange(QCPRange(effectiveLonMin, effectiveLonMax), QCPRange(effectiveLatMin, effectiveLatMax));
 
     // 设置颜色渐变
     QCPColorGradient gradient;
-    if (showSpacing) {
-        gradient = QCPColorGradient(QCPColorGradient::gpThermal);
+    if (!showSpacing) {
+//        gradient = QCPColorGradient(QCPColorGradient::gpJet);
+        gradient.clearColorStops();                 // 清空默认 stop
+        gradient.setColorInterpolation(QCPColorGradient::ciRGB); // 线性 RGB
+        gradient.setColorStopAt(0.13, QColor(242,161,167));   // #B7B5A0
+        gradient.setColorStopAt(0.25, QColor(125,198,155));   // #44757A
+        gradient.setColorStopAt(0.38, QColor(155,215,243));   // #452A3D
+        gradient.setColorStopAt(0.50, QColor(251,221,221));   // #D44C3C
+        gradient.setColorStopAt(0.63, QColor(252,230,207));   // #DD6C4C
+        gradient.setColorStopAt(0.75, QColor(213,234,217));   // #452A3D
+        gradient.setColorStopAt(0.88, QColor(216,238,251));   // #D44C3C
+        gradient.setColorStopAt(1, QColor(220,215,235));   // #DD6C4C
+        gradient.setLevelCount(256); // 设置渐变级别
     } else {
-        gradient = QCPColorGradient(QCPColorGradient::gpJet);
+        //gradient = QCPColorGradient(QCPColorGradient::gpJet);
+        gradient.clearColorStops();                 // 清空默认 stop
+        gradient.setColorInterpolation(QCPColorGradient::ciRGB); // 线性 RGB
+        gradient.setColorStopAt(0.00, QColor(219,49,36));   // #B7B5A0
+        gradient.setColorStopAt(0.17, QColor(252,140,90));   // #44757A
+        gradient.setColorStopAt(0.33, QColor(255,223,146));   // #452A3D
+        gradient.setColorStopAt(0.50, QColor(230,241,243));   // #D44C3C
+        gradient.setColorStopAt(0.67, QColor(144,190,244));   // #DD6C4C
+        gradient.setColorStopAt(0.83, QColor(075,116,178));   // #E5855D
+        gradient.setLevelCount(9); // 设置渐变级别
     }
+
     colorMap->setGradient(gradient);
+    // 收集所有有效值进行统计分析
+    std::vector<double> allValues;
+    for (size_t i = 0; i < result.complexityValues.size(); i++) {
+        int row = result.rowIndices[i];
+        int col = result.colIndices[i];
 
-    // 创建一个简单的查找表而不是完整的二维网格，节省内存
+        if (row >= jumpSize && row < gridData.rows - jumpSize &&
+            col >= jumpSize && col < gridData.cols - jumpSize) {
+            double value = showSpacing ? result.spacingValues[i] : result.complexityValues[i];
+            if (std::isfinite(value)) { // 确保值是有限的
+                allValues.push_back(value);
+            }
+        }
+    }
+
+    if (allValues.empty()) {
+        qWarning() << "没有有效数据用于绘制";
+        return;
+    }
+
+    // 计算统计信息以优化颜色映射
+    std::sort(allValues.begin(), allValues.end());
+    double minVal = allValues.front();
+    double maxVal = allValues.back();
+
+    // 计算百分位数来处理异常值并增强对比度
+    size_t p1_idx = static_cast<size_t>(allValues.size() * 0.01);   // 1%分位数
+    size_t p99_idx = static_cast<size_t>(allValues.size() * 0.99);  // 99%分位数
+    size_t p5_idx = static_cast<size_t>(allValues.size() * 0.05);   // 5%分位数
+    size_t p95_idx = static_cast<size_t>(allValues.size() * 0.95);  // 95%分位数
+
+    double p1_val = allValues[p1_idx];
+    double p99_val = allValues[p99_idx];
+    double p5_val = allValues[p5_idx];
+    double p95_val = allValues[p95_idx];
+    double median = allValues[allValues.size() / 2];
+
+    qDebug() << "数据统计: min=" << minVal << ", max=" << maxVal
+             << ", median=" << median << ", P1=" << p1_val << ", P99=" << p99_val;
+
+    // 智能选择显示范围以增强细节
+    double displayMin, displayMax;
+
+    // 策略：根据数据分布特征选择合适的显示范围
+    double iqr = p95_val - p5_val;  // 四分位距
+    double range = maxVal - minVal;
+
+    if (iqr < range * 0.2) {
+        // 如果大部分数据集中在很小的范围内，使用更紧的范围
+        displayMin = p5_val;
+        displayMax = p95_val;
+
+        // 如果范围仍然太小，使用标准差方法
+        if ((displayMax - displayMin) < range * 0.05) {
+            double mean = std::accumulate(allValues.begin(), allValues.end(), 0.0) / allValues.size();
+            double variance = 0.0;
+            for (double val : allValues) {
+                variance += (val - mean) * (val - mean);
+            }
+            double stddev = std::sqrt(variance / allValues.size());
+
+            displayMin = mean - 1.5 * stddev;
+            displayMax = mean + 1.5 * stddev;
+            displayMin = std::max(displayMin, p1_val);
+            displayMax = std::min(displayMax, p99_val);
+        }
+    } else {
+        // 数据分布较均匀，使用1%-99%范围
+        displayMin = p1_val;
+        displayMax = p99_val;
+    }
+
+    qDebug() << "显示范围: [" << displayMin << ", " << displayMax << "]";
+
+    // 创建值映射表
     std::map<std::pair<int, int>, double> valueMap;
+    auto gammaMap = [=](double v)->double {
+        if (displayMax - displayMin < 1e-12)   // 避免除零
+            return v;
+        double norm = (v - displayMin) / (displayMax - displayMin);   // 0-1
+        norm        = std::pow(norm, GAMMA);                          // γ 拉伸
+        return displayMin + norm * (displayMax - displayMin);         // 还原到数值域
+    };
 
-    // 填入已计算的值
+    // 填充颜色图数据
     for (size_t i = 0; i < result.complexityValues.size(); i++) {
         int row = result.rowIndices[i];
         int col = result.colIndices[i];
@@ -799,49 +837,48 @@ void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
             col >= jumpSize && col < gridData.cols - jumpSize) {
 
             double value = showSpacing ? result.spacingValues[i] : result.complexityValues[i];
-            valueMap[{row, col}] = value;
 
-            // 立即映射到颜色图单元格
+            if (!std::isfinite(value)) continue;
+
+            // 应用智能范围限制以增强对比度
+            double clampedValue = std::max(displayMin, std::min(displayMax, value));
+            double mappedValue    = gammaMap(clampedValue);
+            valueMap[{row, col}] = mappedValue;
+
+            // 映射到颜色图坐标
             int mapRow = (row - jumpSize) / sampleStep;
             int mapCol = (col - jumpSize) / sampleStep;
 
             if (mapRow >= 0 && mapRow < effectiveRows &&
                 mapCol >= 0 && mapCol < effectiveCols) {
-                colorMap->data()->setCell(mapCol, mapRow, value);
+                colorMap->data()->setCell(mapCol, mapRow, clampedValue);
             }
         }
     }
 
-    // 设置有限的插值功能，仅插值重要区域
-    bool enableInterpolation = true; // 可以设为false完全禁用插值
+    // 改进的插值算法（可选，提高视觉质量）
+    bool enableInterpolation = (sampleStep > 1); // 只在降采样时进行插值
 
     if (enableInterpolation) {
-        // 设置更低的插值密度 - 只对每N个点插值
         int interpolationStep = sampleStep;
-        int maxInterpolationPoints = 1000000; // 限制总插值点数
+        int maxInterpolationPoints = 500000;
         int interpolatedCount = 0;
+        const int searchRadius = std::max(2, sampleStep);
 
-        // 简化的搜索半径，与采样步长成比例
-        const int searchRadius = std::max(2, sampleStep * 2);
-
-        for (int row = 15; row < gridData.rows - 15; row += interpolationStep) {
-            for (int col = 15; col < gridData.cols - 15; col += interpolationStep) {
-                // 检查是否已超过最大插值点数
+        for (int row = jumpSize; row < gridData.rows - jumpSize; row += interpolationStep) {
+            for (int col = jumpSize; col < gridData.cols - jumpSize; col += interpolationStep) {
                 if (interpolatedCount >= maxInterpolationPoints) {
-                    goto interpolationDone; // 使用goto跳出嵌套循环
+                    goto interpolationDone;
                 }
 
-                // 跳过已经有值的点
                 if (valueMap.find({row, col}) != valueMap.end()) {
                     continue;
                 }
 
-                // 查找最近点进行简单插值
+                // 反距离权重插值
                 double weightedSum = 0.0;
                 double weightSum = 0.0;
-                int validNeighbors = 0;
 
-                // 扫描周围点时限制扫描范围
                 for (int dr = -searchRadius; dr <= searchRadius; dr += 2) {
                     for (int dc = -searchRadius; dc <= searchRadius; dc += 2) {
                         int nr = row + dr;
@@ -850,23 +887,22 @@ void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
                         auto it = valueMap.find({nr, nc});
                         if (it != valueMap.end()) {
                             double distSquared = dr*dr + dc*dc;
-                            if (distSquared < 0.0001) distSquared = 0.0001; // 避免除零
+                            if (distSquared < 0.0001) distSquared = 0.0001;
 
-                            double weight = 1.0 / distSquared;
+                            double weight = 1.0 / std::sqrt(distSquared);
                             weightedSum += weight * it->second;
                             weightSum += weight;
-                            validNeighbors++;
                         }
                     }
                 }
 
-                // 如果找到了有效邻居，计算插值
-                if (validNeighbors > 0 && weightSum > 0) {
+                if (weightSum > 0) {
                     double interpolatedValue = weightedSum / weightSum;
+                    interpolatedValue = std::max(displayMin, std::min(displayMax, interpolatedValue));
+                    interpolatedValue = gammaMap(interpolatedValue);
 
-                    // 将值映射到颜色图
-                    int mapRow = (row - 15) / sampleStep;
-                    int mapCol = (col - 15) / sampleStep;
+                    int mapRow = (row - jumpSize) / sampleStep;
+                    int mapCol = (col - jumpSize) / sampleStep;
 
                     if (mapRow >= 0 && mapRow < effectiveRows &&
                         mapCol >= 0 && mapCol < effectiveCols) {
@@ -876,8 +912,7 @@ void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
                 }
             }
 
-            // 每处理几行就让界面有机会响应
-            if (row % (interpolationStep * 10) == 0) {
+            if (row % (interpolationStep * 20) == 0) {
                 QCoreApplication::processEvents();
             }
         }
@@ -890,9 +925,12 @@ void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
     QCPColorScale* colorScale = new QCPColorScale(customPlot);
     customPlot->plotLayout()->addElement(0, 1, colorScale);
     colorScale->setType(QCPAxis::atRight);
+    colorScale->setGradient(colorMap->gradient());
     colorMap->setColorScale(colorScale);
 
-    // 设置标签
+    // 设置颜色范围和标签
+    colorMap->setDataRange(QCPRange(displayMin, displayMax));
+
     if (showSpacing) {
         colorScale->axis()->setLabel("建议测线间距 (km)");
     } else {
@@ -912,18 +950,25 @@ void MagneticComplexityAnalyzer::plotComplexityMap(QCustomPlot* customPlot,
     title->setFont(QFont("sans", 12, QFont::Bold));
     customPlot->plotLayout()->addElement(0, 0, title);
 
-    // 设置轴标签
-    customPlot->xAxis->setLabel("经度方向 (格网坐标)");
-    customPlot->yAxis->setLabel("纬度方向 (格网坐标)");
+    // 设置坐标轴标签（根据你的坐标系类型选择）
+    customPlot->xAxis->setLabel("经度 (°)");   // 或者 "东向坐标 (m)" 如果是投影坐标
+    customPlot->yAxis->setLabel("纬度 (°)");   // 或者 "北向坐标 (m)" 如果是投影坐标
 
     // 启用交互功能
     customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
 
-    // 使用平滑插值改进显示
-    colorMap->setInterpolate(true);
+    // 启用平滑插值以改善视觉效果
+    const int maxPixels = customPlot->viewport().width() * customPlot->viewport().height();
+    if (effectiveRows * effectiveCols > maxPixels * 1.2) {   // 给一点冗余
+        sampleStep = qCeil(qSqrt((effectiveRows * effectiveCols) /
+                                 double(maxPixels * 1.2)));
+    }
 
-    // 更新画布
-    colorMap->rescaleDataRange();
+    colorMap->setInterpolate(sampleStep > 1);
+    customPlot->setAntialiasedElement(QCP::aePlottables, false);
+    customPlot->setBufferDevicePixelRatio(customPlot->devicePixelRatioF());
+
+    // 更新显示
     customPlot->rescaleAxes();
     customPlot->replot();
 }
@@ -939,7 +984,7 @@ bool MagneticComplexityAnalyzer::exportToFile(const ComplexityResult& result, co
     QTextStream out(&file);
     out.setCodec("UTF-8");
     out << QChar(0xFEFF); // 添加BOM头
-    out << "lat_index,lon_index,lon,lat,complexity,specing(km)\n";
+    out << "lon,lat,baseMag,index"<<Qt::endl;
 
     const GridData& gridData = result.gridData;
 
@@ -947,17 +992,18 @@ bool MagneticComplexityAnalyzer::exportToFile(const ComplexityResult& result, co
     for (size_t i = 0; i < result.complexityValues.size(); i++) {
         int row = result.rowIndices[i];
         int col = result.colIndices[i];
-
+        int index = 0;
+        if(result.spacingValues[i]>=8)
+            index = 1;
         // 计算实际经纬度
         double lon = gridData.lonMin + col * gridData.cellSize;
         double lat = gridData.latMin + row * gridData.cellSize;
+        double baseMag = gridData.grid[row][col].meanMagnetic;
 
-        out << row << ","
-            << col << ","
-            << lon << ","
+        out << lon << ","
             << lat << ","
-            << result.complexityValues[i] << ","
-            << result.spacingValues[i] << "\n";
+            << baseMag << ","
+            << index << "\n";
     }
 
     file.close();
@@ -1358,53 +1404,61 @@ Geomagnetic::GridData MagneticComplexityAnalyzer::createGrid(const Datapoint& da
 
     return gridData;
 }
+
 // 插值填充空网格
 void MagneticComplexityAnalyzer::interpolateEmptyGrids(GridData& gridData) {
-    bool hasChange;
-    do {
-        hasChange = false;
-        for (int i = 0; i < gridData.rows; i++) {
-            for (int j = 0; j < gridData.cols; j++) {
-                if (!gridData.grid[i][j].hasData) {
-                    std::vector<std::pair<double, double>> neighbors; // <value, weight>
-
-                    // 收集8个方向的邻居
-                    for (int di = -1; di <= 1; di++) {
-                        for (int dj = -1; dj <= 1; dj++) {
-                            if (di == 0 && dj == 0) continue;
-
-                            int ni = i + di;
-                            int nj = j + dj;
-
-                            if (ni >= 0 && ni < gridData.rows &&
-                                nj >= 0 && nj < gridData.cols &&
-                                gridData.grid[ni][nj].hasData) {
-                                double dist = sqrt(di * di + dj * dj);
-                                neighbors.push_back({
-                                    gridData.grid[ni][nj].meanMagnetic,
-                                    1.0 / (dist * dist)
-                                });
-                            }
-                        }
-                    }
-
-                    if (!neighbors.empty()) {
-                        double weightSum = 0;
-                        double valueSum = 0;
-                        for (const auto& pair : neighbors) {
-                            auto value = pair.first;
-                            auto weight = pair.second;
-                            weightSum += weight;
-                            valueSum += value * weight;
-                        }
-                        gridData.grid[i][j].meanMagnetic = valueSum / weightSum;
-                        gridData.grid[i][j].hasData = true;
-                        hasChange = true;
-                    }
-                }
+    // 收集有数据的网格点
+    std::vector<double> x, y, z;
+    for (int i = 0; i < gridData.rows; i++) {
+        for (int j = 0; j < gridData.cols; j++) {
+            if (gridData.grid[i][j].hasData) {
+                // 计算网格中心点的经纬度
+                double lat = gridData.latMin + i * gridData.cellSize;
+                double lon = gridData.lonMin + j * gridData.cellSize;
+                x.push_back(lon);
+                y.push_back(lat);
+                z.push_back(gridData.grid[i][j].meanMagnetic);
             }
         }
-    } while (hasChange);
+    }
+
+    // 没有足够的数据点进行插值
+    if (x.size() < 4) {
+        // 如果数据点太少，使用简单的插值或返回
+        return;
+    }
+
+    // 准备需要插值的网格点
+    std::vector<double> xi, yi;
+    std::vector<std::pair<int, int>> emptyIndices;
+
+    for (int i = 0; i < gridData.rows; i++) {
+        for (int j = 0; j < gridData.cols; j++) {
+            if (!gridData.grid[i][j].hasData) {
+                double lat = gridData.latMin + i * gridData.cellSize;
+                double lon = gridData.lonMin + j * gridData.cellSize;
+                xi.push_back(lon);
+                yi.push_back(lat);
+                emptyIndices.push_back({i, j});
+            }
+        }
+    }
+
+    // 如果没有需要插值的点，直接返回
+    if (xi.empty()) {
+        return;
+    }
+
+    // 执行三次样条插值
+    std::vector<double> interpolatedValues = OptimizedCubicInterpolator::interpolate(x, y, z, xi, yi);
+
+    // 填充插值结果到网格
+    for (size_t k = 0; k < interpolatedValues.size(); k++) {
+        int i = emptyIndices[k].first;
+        int j = emptyIndices[k].second;
+        gridData.grid[i][j].meanMagnetic = interpolatedValues[k];
+        gridData.grid[i][j].hasData = true;
+    }
 }
 // 计算网格梯度
 void MagneticComplexityAnalyzer::calculateGridGradients(GridData& gridData) {

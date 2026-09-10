@@ -52,13 +52,32 @@ Rectangle {
     Map{
         id: map
         anchors.fill: parent
+
         activeMapType: map.supportedMapTypes[1]
         zoomLevel: 1
         plugin: Plugin {
+            id: mapPlugin
             name: 'osm';
             PluginParameter {
                 name: 'osm.mapping.offline.directory'
-                value: ':/offline_tiles/'
+                //value: ':/offline_tiles/'
+                value: Qt.application.dirPath + "/offline_tiles"
+            }
+            PluginParameter {
+                name: "osm.mapping.providersrepository.disabled"
+                value: true
+            }
+            PluginParameter {
+                name: "osm.mapping.offline.enabled"
+                value: true
+            }
+            PluginParameter {
+                name: "osm.mapping.online.enabled"
+                value: false
+            }
+            PluginParameter {
+                name: "osm.mapping.debug"
+                value: true
             }
 
         }
@@ -84,6 +103,11 @@ Rectangle {
 
         Component.onCompleted: {
             var jsonString = omgPolygon.loadChinaBorder()
+//            console.log("Tiles path:", tilesPath)
+
+            // 检查文件是否存在
+//            console.log("Sample tile exists:", Qt.resolvedUrl(tilesPath + "osm_100-1-3-0-0-0.png"))
+
 //            console.log(jsonString)
             var jsonBorder = JSON.parse(jsonString)
 //            console.log(jsonBorder.coordinates[2][0][0])
@@ -152,6 +176,39 @@ Rectangle {
                 radio = 1
             } else {
                 radio = (maxY-minY)/(maxX-minX)
+            }
+        }
+
+        function checkTileFile(basePath) {
+                console.log("=== 检查瓦片文件 ===")
+
+                // 基于您的缩放级别和中心点，计算应该加载的瓦片
+                var zoom = 1
+                var lat = 20.0
+                var lon = 120.75
+
+                // 简单的瓦片坐标计算（这是近似的）
+                var x = Math.floor((lon + 180) / 360 * Math.pow(2, zoom))
+                var y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))
+
+                console.log("For zoom=" + zoom + ", lat=" + lat + ", lon=" + lon)
+                console.log("Expected tile coordinates: x=" + x + ", y=" + y)
+
+                // 检查对应的瓦片文件是否存在
+                var expectedTileName = "osm_" + zoom + "-" + x + "-" + y + "-0.png"
+                var tileUrl = Qt.resolvedUrl(basePath + expectedTileName)
+                console.log("Looking for tile:", expectedTileName)
+                console.log("Full URL:", tileUrl)
+            }
+
+        // 监听地图状态
+        onMapReadyChanged: {
+            console.log("Map ready:", mapReady)
+        }
+
+        onErrorChanged: {
+            if (error !== Map.NoError) {
+                console.error("❌ Map error:", error)
             }
         }
 
@@ -258,6 +315,16 @@ Rectangle {
 
             onMagItemClicked: {
 
+                console.log("=== 磁场数据处理开始 ===")
+                    console.log("选择的数据类型:", item)
+                    console.log("多边形顶点数:", mapPolygon.path.length)
+
+                    // 打印所有顶点坐标
+                    for (var i = 0; i < mapPolygon.path.length; i++) {
+                        var pnt = mapPolygon.path[i]
+                        console.log("顶点", i, ": 纬度=", pnt.latitude, ", 经度=", pnt.longitude)
+                    }
+
                 omgPolygon.clearNodes()
                 var i;
                 for(i=0; i<mapPolygon.path.length; i++){
@@ -344,6 +411,7 @@ Rectangle {
 
             }
         }
+
 //        Connections{
 //            target: qmlPolygon
 //            onSigAddVesselPath:onSigAddVesselPath2(json_str)

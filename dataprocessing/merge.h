@@ -45,7 +45,10 @@ public:
     void rongHe_run(std::string infile0, double delt_phi0, double delt_lamda0);
     void rongHe_run2(double delt_phi0, double delt_lamda0,
                              double min_B, double min_L, double max_B, double max_L,double Bint,double Lint);
+    void rongHe_run3(double delt_phi0, double delt_lamda0,
+                             double min_B, double min_L, double max_B, double max_L,double Bint,double Lint);
     void createMap(double min_B, double min_L, double max_B, double max_L, double Bint, double Lint); // Éú³ÉÄ£°åÈÝÆ÷
+    void createMap2(double min_B, double min_L, double max_B, double max_L,double Bint,double Lint);
     void outResult(QString filepath);
 
     std::vector<std::string>doc;

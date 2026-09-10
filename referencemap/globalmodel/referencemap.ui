@@ -152,6 +152,9 @@
               <height>16777215</height>
              </size>
             </property>
+            <property name="decimals">
+             <number>5</number>
+            </property>
             <property name="value">
              <double>0.500000000000000</double>
             </property>
@@ -180,6 +183,9 @@
               <width>80</width>
               <height>16777215</height>
              </size>
+            </property>
+            <property name="decimals">
+             <number>5</number>
             </property>
             <property name="value">
              <double>0.500000000000000</double>
@@ -394,7 +400,7 @@
            <height>0</height>
           </size>
          </property>
-         <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="0,3,6,0">
+         <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="0,3,6,0,0">
           <item>
            <spacer name="horizontalSpacer_7">
             <property name="orientation">
@@ -417,6 +423,13 @@
           </item>
           <item>
            <widget class="txtLineEdit" name="lineEdit_savePath"/>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_2">
+            <property name="text">
+             <string>浏览</string>
+            </property>
+           </widget>
           </item>
           <item>
            <spacer name="horizontalSpacer_8">

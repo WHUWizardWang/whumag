@@ -117,6 +117,7 @@ void subareaBlocks::createBounds()
             ijBounds[i][j] = temp;
         }
     }
+
 }
 
 QVector<double>  subareaBlocks::extractSubRange(ijBound ij)
@@ -181,32 +182,71 @@ void subareaBlocks::create_dp_result()
     {
         datapoint_result[i].resize(col_blockCount);
     }
-    // 创建每一分块的结果模板
-    QVector<QVector<ijBound>> ij_block;
-    ij_block.resize(row_blockCount);
-    for (int i = 0; i < row_blockCount; ++i)
-    {
-        ij_block[i].resize(col_blockCount);
-    }
+    // // 创建每一分块的结果模板
+    // QVector<QVector<ijBound>> ij_block;
+    // ij_block.resize(row_blockCount);
+    // for (int i = 0; i < row_blockCount; ++i)
+    // {
+    //     ij_block[i].resize(col_blockCount);
+    // }
     //
-    for (int i = 0;i<row_blockCount;i++)
+    // for (int i = 0;i<row_blockCount;i++)
+    // {
+    //     for (int j = 0;j<col_blockCount;j++)
+    //     {
+    //         int flag = 1;
+    //         double i_start = dataInput[ijBounds[i][j].i_min][ijBounds[i][j].j_min].x;
+    //         double j_start = dataInput[ijBounds[i][j].i_min][ijBounds[i][j].j_min].y;
+    //         double i_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].x;
+    //         double j_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].y;
+    //         int col_jj = round((j_end-j_start)/0.5 +1); // 该区行列数
+    //         int row_ii = round((i_end-i_start)/0.5 +1);
+    //         for (int ii = 0;ii<row_ii;ii++)
+    //         {
+    //             for (int jj = 0;jj<col_jj;jj++)
+    //             {
+    //                 SinglePoint point;
+    //                 point.X = i_start + 0.5*ii;
+    //                 point.Y = j_start + 0.5*jj;
+    //                 point.tMagnetic = 0.0;
+    //                 datapoint_result[i][j].insert(std::make_pair(flag, point));
+    //                 flag++;
+    //             }
+    //         }
+    //     }
+    // }
+    for (int i = 0; i < row_blockCount; i++)
     {
-        for (int j = 0;j<col_blockCount;j++)
+        for (int j = 0; j < col_blockCount; j++)
         {
             int flag = 1;
-            double i_start = dataInput[ijBounds[i][j].i_min][ijBounds[i][j].j_min].x;
-            double j_start = dataInput[ijBounds[i][j].i_min][ijBounds[i][j].j_min].y;
-            double i_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].x;
-            double j_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].y;
-            int col_jj = round((j_end-j_start)/0.5 +1); // 该区行列数
-            int row_ii = round((i_end-i_start)/0.5 +1);
-            for (int ii = 0;ii<row_ii;ii++)
+
+            // 获取当前分块的物理坐标范围
+            double x_start = dataInput[ijBounds[i][j].i_min][ijBounds[i][j].j_min].x;
+            double y_start = dataInput[ijBounds[i][j].i_min][ijBounds[i][j].j_min].y;
+            double x_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].x;
+            double y_end = dataInput[ijBounds[i][j].i_max][ijBounds[i][j].j_max].y;
+
+            // 确保起点对齐到 0.5 的整数倍（避免 -0.25 这样的偏移）
+            x_start = std::round(x_start / 0.5) * 0.5;
+            y_start = std::round(y_start / 0.5) * 0.5;
+
+            // 计算该分块的行列数
+            int cols = static_cast<int>(std::round((x_end - x_start) / 0.5)) + 1;
+            int rows = static_cast<int>(std::round((y_end - y_start) / 0.5)) + 1;
+
+            // 重新计算终点，确保不超出输入范围
+            x_end = x_start + (cols - 1) * 0.5;
+            y_end = y_start + (rows - 1) * 0.5;
+
+            // 生成网格点
+            for (int ii = 0; ii < rows; ii++)
             {
-                for (int jj = 0;jj<col_jj;jj++)
+                for (int jj = 0; jj < cols; jj++)
                 {
                     SinglePoint point;
-                    point.X = i_start + 0.5*ii;
-                    point.Y = j_start + 0.5*jj;
+                    point.X = x_start + 0.5 * jj;  // X 方向（列）
+                    point.Y = y_start + 0.5 * ii;  // Y 方向（行）
                     point.tMagnetic = 0.0;
                     datapoint_result[i][j].insert(std::make_pair(flag, point));
                     flag++;
@@ -237,27 +277,27 @@ void subareaBlocks::subModel(Datainfo datainfo)
             poly.Result(datainfo, datapoint_result[i][j],tmp_dp);
 
             // TaylorModel
-//            Geomagnetic::TaylorModel taylor;
-//            Geomagnetic::Datapoint tmp_dp = anop2dp(ijBounds[i][j]);
-//            datainfo.Cutoff = 5;
-//            ReadData readdata;
-//            readdata.DataSet(tmp_dp, datainfo);
-//            taylor.init(datainfo);
-//            taylor.CalculateM(tmp_dp);
-//            taylor.CalculateAQ(tmp_dp);
-//            taylor.Result(datapoint_result[i][j]);
+            //            Geomagnetic::TaylorModel taylor;
+            //            Geomagnetic::Datapoint tmp_dp = anop2dp(ijBounds[i][j]);
+            //            datainfo.Cutoff = 5;
+            //            ReadData readdata;
+            //            readdata.DataSet(tmp_dp, datainfo);
+            //            taylor.init(datainfo);
+            //            taylor.CalculateM(tmp_dp);
+            //            taylor.CalculateAQ(tmp_dp);
+            //            taylor.Result(datapoint_result[i][j]);
             // subarea output to txt
-//            QFile file("/home/OMG1/build-test1-unknown-Debug/x/"+QString::number(i)+"_"+QString::number(j)+".txt");
-//            if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-//            {
-//                qDebug() << "无法打开文件进行写入：" << file.errorString();
-//            }
-//            QTextStream out(&file);
-//            for (auto &elem : datapoint_result[i][j])
-//            {
-//                out<<elem.second.X<<" "<<elem.second.Y<<" "<<elem.second.tMagnetic<<endl;
-//            }
-//            file.close();
+            //            QFile file("/home/OMG1/build-test1-unknown-Debug/x/"+QString::number(i)+"_"+QString::number(j)+".txt");
+            //            if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+            //            {
+            //                qDebug() << "无法打开文件进行写入：" << file.errorString();
+            //            }
+            //            QTextStream out(&file);
+            //            for (auto &elem : datapoint_result[i][j])
+            //            {
+            //                out<<elem.second.X<<" "<<elem.second.Y<<" "<<elem.second.tMagnetic<<endl;
+            //            }
+            //            file.close();
         }
     }
 }
@@ -267,12 +307,12 @@ void subareaBlocks::subModel(Datainfo datainfo)
 void subareaBlocks::submerge(Datapoint &all)
 {
     rongHe rh;
-//    double min_i = dataInput[ijBounds[0][0].i_min][ijBounds[0][0].j_min].x;
-//    double min_j = dataInput[ijBounds[0][0].i_min][ijBounds[0][0].j_min].y;
-//    double max_i = dataInput[ijBounds[row_blockCount-1][col_blockCount-1].i_max]
-//            [ijBounds[row_blockCount-1][col_blockCount-1].j_max].x;
-//    double max_j = dataInput[ijBounds[row_blockCount-1][col_blockCount-1].i_max]
-//            [ijBounds[row_blockCount-1][col_blockCount-1].j_max].y;
+    //    double min_i = dataInput[ijBounds[0][0].i_min][ijBounds[0][0].j_min].x;
+    //    double min_j = dataInput[ijBounds[0][0].i_min][ijBounds[0][0].j_min].y;
+    //    double max_i = dataInput[ijBounds[row_blockCount-1][col_blockCount-1].i_max]
+    //            [ijBounds[row_blockCount-1][col_blockCount-1].j_max].x;
+    //    double max_j = dataInput[ijBounds[row_blockCount-1][col_blockCount-1].i_max]
+    //            [ijBounds[row_blockCount-1][col_blockCount-1].j_max].y;
     QVector<double> xx,yy;
     for (const auto elem:all)
     {
@@ -302,7 +342,7 @@ void subareaBlocks::submerge(Datapoint &all)
             rh.doc_points.push_back(p);
         }
     }
-    rh.rongHe_run2(3.0,3.0,min_j,min_i,max_j,max_i,step_j,step_i);
+    rh.rongHe_run3(3.0,3.0,min_j,min_i,max_j,max_i,step_j,step_i);
     for (auto elem:rh.data)
     {
         result.push_back({elem.B,elem.L,elem.T});
@@ -481,12 +521,12 @@ int subareaBlocks::inputPara_subarea(QDialog &dialog,int &data_num, QStringList 
     spinbox6->setValue(2);
     spinbox6->setMaximum(6);
     form.addRow("分成行数: ", spinbox6);
-//    // #8
-//    QLineEdit *lineEdit = new QLineEdit(&dialog);
-//    form.addRow("另存为: ", lineEdit);
+    //    // #8
+    //    QLineEdit *lineEdit = new QLineEdit(&dialog);
+    //    form.addRow("另存为: ", lineEdit);
     // #9
     QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
-        Qt::Horizontal, &dialog);
+                               Qt::Horizontal, &dialog);
     form.addRow(&buttonBox);
     QObject::connect(&buttonBox, SIGNAL(accepted()), &dialog, SLOT(accept()));
     QObject::connect(&buttonBox, SIGNAL(rejected()), &dialog, SLOT(reject()));
@@ -535,7 +575,7 @@ void subareaBlocks::subareaAll(Datapoint &all,Datainfo datainfo,Datapoint &datap
         for (int j = 0;j<col_blockCount;j++)
         {
             outstr = outstr+ "第" +QString::number(i+1) + "行 - 第"
-                    + QString::number(j+1)+"列 : "+QString::number(subrms[i][j], 'f', 3) + "\n";
+                     + QString::number(j+1)+"列 : "+QString::number(subrms[i][j], 'f', 3) + "\n";
         }
     }
     outstr = outstr+"总RMS: "+QString::number(rms, 'f', 3);
@@ -563,7 +603,7 @@ void subareaBlocks::build(Datapoint &all,Datainfo datainfo,Datapoint &datapoint,
         for (int j = 0;j<col_blockCount;j++)
         {
             outstr = outstr+ "第" +QString::number(i+1) + "行 - 第"
-                    + QString::number(j+1)+"列 : "+QString::number(subrms[i][j], 'f', 3) + "\n";
+                     + QString::number(j+1)+"列 : "+QString::number(subrms[i][j], 'f', 3) + "\n";
         }
     }
     outstr = outstr+"总RMS: "+QString::number(rms, 'f', 3);
