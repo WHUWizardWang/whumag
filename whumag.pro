@@ -297,10 +297,12 @@ win32 {
     } else {
         DEPLOY_DIR = $$OUT_PWD/release
     }
-    QMAKE_POST_LINK += $$quote(mkdir -p \"$$DEPLOY_DIR/resources\" \"$$DEPLOY_DIR/offline_tiles\") $$escape_expand(\\n\\t)
-    QMAKE_POST_LINK += $$quote(cp -f \"$$PWD/resources/high_quality.rcc\" \"$$DEPLOY_DIR/resources/\") $$escape_expand(\\n\\t)
-    QMAKE_POST_LINK += $$quote(cp -f \"$$PWD/deploy/\"*.dll \"$$DEPLOY_DIR/\") $$escape_expand(\\n\\t)
-    QMAKE_POST_LINK += $$quote(cp -f \"$$PWD/resources/Map/offline_tiles/\"*.png \"$$DEPLOY_DIR/offline_tiles/\")
+    # A real .bat file (not inline shell commands) -- see deploy_resources.bat
+    # for why: qmake/make's POST_LINK execution mechanism on Windows varies
+    # by environment (sometimes routed through sh.exe, sometimes invoked
+    # directly with no shell at all), and a .bat file is the one thing
+    # Windows always hands to cmd.exe regardless of which one launched it.
+    QMAKE_POST_LINK += $$quote($$shell_path($$PWD/deploy_resources.bat)) $$shell_quote($$shell_path($$DEPLOY_DIR)) $$shell_quote($$shell_path($$PWD))
 }
 
 # unix {
