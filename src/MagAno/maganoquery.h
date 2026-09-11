@@ -11,28 +11,46 @@
 class MagAnoQuery
 {
 private:
+    // Returns 0 on success (queries were actually run -- individual points
+    // with no matching DB row are expected/normal and just keep z=0, that's
+    // not a failure), or -1 if the database connection itself failed, in
+    // which case NO point was queried at all.
+    //
+    // Previously this always `return 0`, even when initConnection() failed
+    // -- the caller (AnoQueryForm::on_pushButton_3_clicked) treated that as
+    // full success and drew a heatmap/contour from it regardless. Combined
+    // with AnoPoint's x/y/z having no default member initializers at the
+    // time, a failed connection (e.g. WHUMAG_DB_PASSWORD not set, or the DB
+    // simply not running) meant every point kept whatever uninitialized
+    // stack garbage it started with -- which, since freshly-committed OS
+    // memory pages are often zero-filled, frequently rendered as a blank/
+    // empty plot instead of a visible error. AnoPoint now default-
+    // initializes to 0 regardless, but the caller still needs to know the
+    // connection failed so it can tell the user instead of silently
+    // "succeeding" with an empty result.
     static int omg_query_impl(QVector<AnoPoint> &ano_pnts,
                                const QString &tableName,
                                const std::function<int(double x, double y)> &indexCalc,
                                const std::function<void(AnoPoint&, QSqlQuery&)> &assign)
     {
-        if (DatabaseManager::instance().initConnection())
+        if (!DatabaseManager::instance().initConnection())
         {
-            qDebug() << "Database connection successful!";
-            QSqlDatabase db = DatabaseManager::instance().getDatabase();
-            QSqlQuery query(db);
-            for (int i = 0; i < ano_pnts.size(); ++i)
-            {
-                // Ensure z (and, for a failed lookup, x/y) never surface uninitialized
-                // stack memory to the caller if this point has no matching DB row.
-                ano_pnts[i].z = 0.0;
-                int idx = indexCalc(ano_pnts[i].x, ano_pnts[i].y);
-                QString str = QString("select * from %1 where index_ij = %2;").arg(tableName).arg(idx);
-                query.prepare(str);
-                query.exec();
-                if (query.next())
-                    assign(ano_pnts[i], query);
-            }
+            qWarning() << "MagAnoQuery: database connection failed, aborting query against" << tableName;
+            return -1;
+        }
+
+        qDebug() << "Database connection successful!";
+        QSqlDatabase db = DatabaseManager::instance().getDatabase();
+        QSqlQuery query(db);
+        for (int i = 0; i < ano_pnts.size(); ++i)
+        {
+            ano_pnts[i].z = 0.0;
+            int idx = indexCalc(ano_pnts[i].x, ano_pnts[i].y);
+            QString str = QString("select * from %1 where index_ij = %2;").arg(tableName).arg(idx);
+            query.prepare(str);
+            query.exec();
+            if (query.next())
+                assign(ano_pnts[i], query);
         }
         return 0;
     }

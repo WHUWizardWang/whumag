@@ -132,39 +132,36 @@ void AnoQueryForm::on_pushButton_3_clicked()
         if (ui->comboBox_error->currentText() == "EMAG2")
         {
             ret = MagAnoQuery::omg_emag2(ano_pnts);
-            if (ano_pnts.size()>4){
-            draw_Form *draw_form_ = new draw_Form;
-            draw_form_->setAttribute(Qt::WA_DeleteOnClose);
-            QVector<double> xx,yy,zz;
-            draw_form_->create_xyz_p(ano_pnts,xx,yy,zz);
-            draw_form_->autoset_heatMapView(xx,yy,zz);
-//          draw_form_->create_contour_txt(ano_pnts);
-            draw_form_->autoset_contourView(xx,yy,zz);
-            draw_form_->show();}
         }
         else if (ui->comboBox_error->currentText() == "MAMEA")
         {
             ret = MagAnoQuery::omg_mamea(ano_pnts);
-            if (ano_pnts.size()>4){
-            draw_Form *draw_form_ = new draw_Form;
-            draw_form_->setAttribute(Qt::WA_DeleteOnClose);
-            QVector<double> xx,yy,zz;
-            draw_form_->create_xyz_p(ano_pnts,xx,yy,zz);
-            draw_form_->autoset_heatMapView(xx,yy,zz);
-//            draw_form_->create_contour_txt(ano_pnts);
-            draw_form_->autoset_contourView(xx,yy,zz);
-            draw_form_->show();
-            }
         }
 
+        // Only draw/report on an actual successful query. Previously the
+        // heatmap/contour was drawn unconditionally BEFORE this check even
+        // ran, so a failed database connection (ret != 0) still produced a
+        // plot -- just one built from whatever was in ano_pnts beforehand
+        // (uninitialized-then-zeroed coordinates), which looked like an
+        // empty/blank result instead of a clear error.
         if (ret == 0)
         {
+            if (ano_pnts.size() > 4)
+            {
+                draw_Form *draw_form_ = new draw_Form;
+                draw_form_->setAttribute(Qt::WA_DeleteOnClose);
+                QVector<double> xx,yy,zz;
+                draw_form_->create_xyz_p(ano_pnts,xx,yy,zz);
+                draw_form_->autoset_heatMapView(xx,yy,zz);
+                draw_form_->autoset_contourView(xx,yy,zz);
+                draw_form_->show();
+            }
             fill_item_model(ano_pnts);
             ui->textBrowser->append(QTime::currentTime().toString("hh:mm:ss") + "\t完成计算。有效查询数量共计：" + QString::number(length));
         }
         else
         {
-            ui->textBrowser->append("COF文件不存在！");
+            ui->textBrowser->append(QTime::currentTime().toString("hh:mm:ss") + "\t查询失败：无法连接数据库，请检查数据库服务及连接配置（WHUMAG_DB_PASSWORD 环境变量等）。");
         }
     }
 }
