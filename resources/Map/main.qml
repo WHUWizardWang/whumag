@@ -14,41 +14,6 @@ Rectangle {
 //    anchors.fill: parent
     signal drawStateChanged(int state)
 
-//    Plugin{
-//        id: mapPlugin
-////        name: "mapboxgl"
-//        name: "osm"
-//        PluginParameter{
-//            name: "osm.mapping.offline.directory"
-//            value: ":/offline_tiles/"
-//        }
-//    }
-
-    // Plugin {
-    //     id: mapPlugin
-    //     name: "osm";
-    //     PluginParameter {
-    //         name: 'osm.mapping.offline.directory'
-    //         value: 'qrc:/offline_tiles/'
-    //     }
-    // }
-    // PluginParameter {
-    //     name: "osm.mapping.providersrepository.disabled"
-    //     value: true
-    // }
-
-    // // PluginParameter {
-    // //     name: "osm.mapping.cache.directory"
-    // //     value: 'D:/Qtapp/whumag/tiles/'
-    // // }
-
-    // PluginParameter {
-    //     name: "osm.mapping.online.enabled"
-    //     value: false
-    // }
-
-
-
     Map{
         id: map
         anchors.fill: parent
@@ -58,28 +23,31 @@ Rectangle {
         plugin: Plugin {
             id: mapPlugin
             name: 'osm';
+            // Qt.application.dirPath is not a real QML property (it silently
+            // evaluates to undefined, so the offline directory used to
+            // resolve to the literal path "undefined/offline_tiles", which
+            // never existed -- offline tiles were never actually found).
+            // appDirPath is a real C++ context property set in
+            // MapForm::MapForm() to QCoreApplication::applicationDirPath().
             PluginParameter {
                 name: 'osm.mapping.offline.directory'
-                //value: ':/offline_tiles/'
-                value: Qt.application.dirPath + "/offline_tiles"
+                value: appDirPath + "/offline_tiles"
             }
             PluginParameter {
                 name: "osm.mapping.providersrepository.disabled"
                 value: true
             }
-            PluginParameter {
-                name: "osm.mapping.offline.enabled"
-                value: true
-            }
-            PluginParameter {
-                name: "osm.mapping.online.enabled"
-                value: false
-            }
-            PluginParameter {
-                name: "osm.mapping.debug"
-                value: true
-            }
-
+            // Removed: osm.mapping.offline.enabled, osm.mapping.online.enabled,
+            // and osm.mapping.debug are not parameters Qt's OSM geoservice
+            // plugin actually reads (verified against qtlocation's OSM
+            // plugin source for this Qt version) -- they were silently
+            // ignored and gave a false impression that "online" access was
+            // disabled. There is no such switch: a tile request that misses
+            // the offline directory above falls through to a live network
+            // request against Qt's hardcoded OSM/Thunderforest tile-server
+            // fallbacks. The offline tile set on disk currently covers the
+            // whole world at zoom 0-5 and mainland China at zoom 6-8; panning
+            // or zooming outside that will still attempt to go online.
         }
         center: QtPositioning.coordinate(20.0, 120.75)
 

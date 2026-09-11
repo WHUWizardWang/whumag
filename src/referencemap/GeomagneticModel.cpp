@@ -27,23 +27,6 @@ namespace Geomagnetic
 	/// 2023.12.8
 	/// </summary>
 	
-	//广义逆矩阵的求解
-	static MatrixXd computePseudoinverse(const MatrixXd& matrix)
-	{
-		BDCSVD<MatrixXd> svd(matrix, ComputeFullU |ComputeFullV);
-		const auto& singularValues = svd.singularValues();
-		MatrixXd singularValuesInv(matrix.cols(), matrix.rows());
-		singularValuesInv.setZero();
-		int size = singularValues.size();
-		for (unsigned int i = 0; i < size; ++i) {
-			if (singularValues(i) > 1e-6) { // tolerance
-				singularValuesInv(i, i) = 1 / singularValues(i);
-			}
-		}
-
-		return svd.matrixV() * singularValuesInv * svd.matrixU().adjoint();
-	}
-	
     double Computer(SinglePoint& p1, SinglePoint& p2)
     {
         double temp = (p1.X - p2.X) * (p1.X - p2.X) + (p1.Y - p2.Y) * (p1.Y - p2.Y);
@@ -60,27 +43,6 @@ namespace Geomagnetic
     }
 
     TaylorModel::~TaylorModel() {
-    }
-
-    double TaylorModel::factorial(int n) {
-        if (n <= 1) return 1.0;
-        double result = 1.0;
-        for (int i = 2; i <= n; ++i) {
-            result *= i;
-        }
-        return result;
-    }
-
-    double TaylorModel::binomialCoeff(int n, int k) {
-        if (k < 0 || k > n) return 0.0;
-        if (k == 0 || k == n) return 1.0;
-
-        double result = 1.0;
-        for (int i = 1; i <= k; ++i) {
-            result *= (n - (i - 1));
-            result /= i;
-        }
-        return result;
     }
 
     double TaylorModel::normalizeCoordinate(double value, double minVal, double maxVal) {
@@ -134,52 +96,76 @@ namespace Geomagnetic
         centerY = normalizeCoordinate(y, yMin, yMax);
     }
 
-    double TaylorModel::calculateCoefficient(const Datapoint& datapoints, int p, int q) {
-        // Implementation of least squares method to find coefficient for x^p * y^q
-        // This is simplified for demonstration - a more robust approach would use
-        // linear algebra libraries for solving the system of equations
+    void TaylorModel::computeCoefficients(const Datapoint& trainingData, int cutoff) {
+        // Initialize coefficients to zero
+        coefficients.assign(cutoff + 1, std::vector<double>(cutoff + 1, 0.0));
 
-        double sumXpYq = 0.0;
-        double sumT = 0.0;
-        double sumXpYqT = 0.0;
-        double sumXpYqXpYq = 0.0;
+        // Enumerate every basis term x^p*y^q with p+q <= cutoff, in a fixed order.
+        std::vector<std::pair<int, int>> terms;
+        for (int order = 0; order <= cutoff; ++order) {
+            for (int p = 0; p <= order; ++p) {
+                terms.emplace_back(p, order - p);
+            }
+        }
+        const int numTerms = static_cast<int>(terms.size());
+        if (trainingData.empty() || numTerms == 0) {
+            return;
+        }
+        // A joint fit over ~5000+ terms (cutoff around 100) would need gigabytes
+        // for the normal-equation matrix and take an impractically long time to
+        // solve; refuse rather than hang/OOM the UI.
+        const int maxTerms = 2000;
+        if (numTerms > maxTerms) {
+            qWarning() << "TaylorModel::computeCoefficients: cutoff" << cutoff
+                       << "produces" << numTerms << "basis terms (>" << maxTerms
+                       << "), which is impractical to fit jointly; skipping.";
+            return;
+        }
 
-        for (const auto& point : datapoints) {
+        // Previously each (p,q) coefficient was regressed independently against
+        // the data (coeff = sum(xpyq*t)/sum(xpyq^2)), which is only correct if
+        // every pair of basis monomials x^p*y^q happens to be orthogonal over
+        // the survey's point distribution -- generally false for scattered
+        // survey data, so the fit degraded as cutoff grew. This instead solves
+        // the true joint least-squares problem for all terms at once via the
+        // normal equations, built incrementally so the full N x numTerms design
+        // matrix is never materialized (important since N can be tens of
+        // thousands of survey points).
+        Eigen::MatrixXd AtA = Eigen::MatrixXd::Zero(numTerms, numTerms);
+        Eigen::VectorXd Atb = Eigen::VectorXd::Zero(numTerms);
+        Eigen::VectorXd phi(numTerms);
+        std::vector<double> xpow(cutoff + 1), ypow(cutoff + 1);
+
+        for (const auto& point : trainingData) {
             double x = point.second.X - centerX;
             double y = point.second.Y - centerY;
             double t = point.second.tMagnetic;
 
-            double xpyq = std::pow(x, p) * std::pow(y, q);
-
-            sumXpYq += xpyq;
-            sumT += t;
-            sumXpYqT += xpyq * t;
-            sumXpYqXpYq += xpyq * xpyq;
-        }
-
-        double n = datapoints.size();
-        if (std::abs(sumXpYqXpYq) < 1e-10) {
-            return 0.0;
-        }
-
-        // Scale by factorial to match Taylor series formula
-        double coeff = sumXpYqT / sumXpYqXpYq;
-        coeff /= (factorial(p) * factorial(q));
-
-        return coeff;
-    }
-
-    void TaylorModel::computeCoefficients(const Datapoint& trainingData, int cutoff) {
-        // Initialize coefficients to zero
-        coefficients.clear();
-        coefficients.resize(cutoff + 1, std::vector<double>(cutoff + 1, 0.0));
-
-        // Compute coefficients for each term x^p * y^q where p+q <= cutoff
-        for (int order = 0; order <= cutoff; ++order) {
-            for (int p = 0; p <= order; ++p) {
-                int q = order - p;
-                coefficients[p][q] = calculateCoefficient(trainingData, p, q);
+            xpow[0] = 1.0;
+            ypow[0] = 1.0;
+            for (int i = 1; i <= cutoff; ++i) {
+                xpow[i] = xpow[i - 1] * x;
+                ypow[i] = ypow[i - 1] * y;
             }
+            for (int k = 0; k < numTerms; ++k) {
+                phi(k) = xpow[terms[k].first] * ypow[terms[k].second];
+            }
+
+            AtA.noalias() += phi * phi.transpose();
+            Atb.noalias() += phi * t;
+        }
+
+        // Small ridge term guards against a singular/ill-conditioned system
+        // when cutoff is large relative to the number of training points.
+        double ridge = 1e-10 * AtA.diagonal().maxCoeff();
+        if (!(ridge > 0.0)) {
+            ridge = 1e-10;
+        }
+        AtA.diagonal().array() += ridge;
+
+        Eigen::VectorXd c = AtA.ldlt().solve(Atb);
+        for (int k = 0; k < numTerms; ++k) {
+            coefficients[terms[k].first][terms[k].second] = c(k);
         }
     }
 
@@ -260,32 +246,46 @@ namespace Geomagnetic
 
     void Polyhedral::ComputeQ(Datainfo& datainfo, Datapoint& datapoint) {
         A.resize(m, n);
+        // The kernel matrix is symmetric (A(i,j) depends only on the distance
+        // between point i and j), so only the upper triangle is computed and
+        // mirrored -- halves the sqrt()/arithmetic work versus recomputing
+        // both A(i,j) and A(j,i) independently.
+        std::vector<double> xs, ys;
+        xs.reserve(m);
+        ys.reserve(m);
+        for (const auto& entry : datapoint) {
+            xs.push_back(entry.second.X);
+            ys.push_back(entry.second.Y);
+        }
+
         if (datainfo.PolyQ == 0)
         {
-            int i = 0;
-            for (const auto& elem : datapoint)
+            for (size_t i = 0; i < m; ++i)
             {
-                int j = 0;
-                for (const auto& entry : datapoint)
+                A(i, i) = std::sqrt(Sigma2);
+                for (size_t j = i + 1; j < m; ++j)
                 {
-                    A(i, j) = sqrt((elem.second.X - entry.second.X) * (elem.second.X - entry.second.X) + (elem.second.Y - entry.second.Y) * (elem.second.Y - entry.second.Y) + Sigma2);
-                    ++j;
+                    double dx = xs[i] - xs[j];
+                    double dy = ys[i] - ys[j];
+                    double v = std::sqrt(dx * dx + dy * dy + Sigma2);
+                    A(i, j) = v;
+                    A(j, i) = v;
                 }
-                ++i;
             }
         }
         else if (datainfo.PolyQ == 1)
         {
-            int i = 0;
-            for (const auto& elem : datapoint)
+            for (size_t i = 0; i < m; ++i)
             {
-                int j = 0;
-                for (const auto& entry : datapoint)
+                A(i, i) = 1.0 / std::sqrt(Sigma2);
+                for (size_t j = i + 1; j < m; ++j)
                 {
-                    A(i, j) = 1/sqrt((elem.second.X - entry.second.X) * (elem.second.X - entry.second.X) + (elem.second.Y - entry.second.Y) * (elem.second.Y - entry.second.Y) + Sigma2);
-                    ++j;
+                    double dx = xs[i] - xs[j];
+                    double dy = ys[i] - ys[j];
+                    double v = 1.0 / std::sqrt(dx * dx + dy * dy + Sigma2);
+                    A(i, j) = v;
+                    A(j, i) = v;
                 }
-                ++i;
             }
         }
         else std::cerr << "Unknown Kernel function" << endl;
@@ -351,33 +351,68 @@ namespace Geomagnetic
     }
 
     // Result 函数
+    //
+    // Mathematically identical to the original per-point double loop (every
+    // output point's field value is still the exact kernel-weighted sum over
+    // ALL training points, using the exact fitted X -- this is NOT a
+    // nearest-neighbor approximation. The multiquadric kernels used here grow
+    // (PolyQ==0) or decay only slowly (PolyQ==1) with distance, so truncating
+    // to the K nearest training points -- e.g. via the KD-tree machinery
+    // elsewhere in this file -- would change the result, not just speed it
+    // up; that tradeoff isn't taken here. Instead this reformulates the same
+    // O(M*N) computation as a handful of Eigen/BLAS matrix operations (a
+    // single (M x 2)*(2 x N) GEMM for the cross term, one elementwise kernel
+    // pass, one GEMV) instead of a scalar double loop with a sqrt() call per
+    // point pair -- exact same result, much faster in practice.
     void Polyhedral::Result(Datainfo& datainfo, Datapoint& dataresult, Datapoint& datapoint) {
-        Ap.resize(n);
-        if (datainfo.PolyQ == 0)
+        if (datainfo.PolyQ != 0 && datainfo.PolyQ != 1) {
+            std::cerr << "Unknown Kernel function" << endl;
+            return;
+        }
+
+        Eigen::VectorXd trainX(n), trainY(n);
         {
-            for (auto& elem : dataresult)
-            {
-                int j = 0;
-                for (const auto& entry : datapoint)
-                {
-                    Ap(0, j) = sqrt((elem.second.X - entry.second.X) * (elem.second.X - entry.second.X) + (elem.second.Y - entry.second.Y) * (elem.second.Y - entry.second.Y) + Sigma2);
-                    ++j;
-                }
-                elem.second.tMagnetic = Ap * X;
+            size_t j = 0;
+            for (const auto& entry : datapoint) {
+                trainX(j) = entry.second.X;
+                trainY(j) = entry.second.Y;
+                ++j;
             }
         }
-        else if (datainfo.PolyQ == 1)
+
+        const size_t M = dataresult.size();
+        Eigen::VectorXd outX(M), outY(M);
         {
-            for (auto& elem : dataresult)
-            {
-                int j = 0;
-                for (const auto& entry : datapoint)
-                {
-                    Ap(0, j) = 1 / sqrt((elem.second.X - entry.second.X) * (elem.second.X - entry.second.X) + (elem.second.Y - entry.second.Y) * (elem.second.Y - entry.second.Y) + Sigma2);
-                    ++j;
-                }
-                elem.second.tMagnetic = Ap * X;
+            size_t i = 0;
+            for (const auto& elem : dataresult) {
+                outX(i) = elem.second.X;
+                outY(i) = elem.second.Y;
+                ++i;
             }
+        }
+
+        // D(i,j) = |out_i - train_j|^2 = |out_i|^2 + |train_j|^2 - 2*out_i.train_j
+        Eigen::MatrixXd D =
+            outX.array().square().matrix().replicate(1, n)
+            + trainX.array().square().matrix().transpose().replicate(M, 1)
+            - 2.0 * outX * trainX.transpose()
+            + outY.array().square().matrix().replicate(1, n)
+            + trainY.array().square().matrix().transpose().replicate(M, 1)
+            - 2.0 * outY * trainY.transpose();
+        D = (D.array() + Sigma2).matrix();
+
+        Eigen::MatrixXd K;
+        if (datainfo.PolyQ == 0) {
+            K = D.array().sqrt().matrix();
+        } else {
+            K = D.array().sqrt().inverse().matrix();
+        }
+
+        Eigen::VectorXd result = K * X;
+        size_t i = 0;
+        for (auto& elem : dataresult) {
+            elem.second.tMagnetic = result(i);
+            ++i;
         }
     }
 
@@ -405,54 +440,90 @@ namespace Geomagnetic
         MatrixXd mat3(N+3, N+3);
         MatrixXd mat(N, 3);
         MatrixXd Z = MatrixXd::Zero(3, 3);
-        int i = 0;
-        for (auto elem = datapoint.begin(); elem != datapoint.end();elem++)
+
+        std::vector<SinglePoint> pts;
+        pts.reserve(N);
+        for (const auto& elem : datapoint) {
+            pts.push_back(elem.second);
+        }
+
+        // A is symmetric (Computer() is a symmetric distance function), so
+        // only the upper triangle is computed and mirrored.
+        for (int i = 0; i < N; ++i)
         {
-            int j = 0;
-            for (auto entry = datapoint.begin(); entry != datapoint.end();entry++) {
-                if (i == j)
-                {
-                    A(i, j) = C / 2;
-                    j++;
-                    continue;
-                }
-                //                cout << Computer(elem->second, entry->second) << endl;
-                A(i, j) = Computer(elem->second, entry->second)*log(Computer(elem->second, entry->second)+E);
-                //                cout << A(i, j) << endl;
-                ++j;
+            A(i, i) = C / 2;
+            for (int j = i + 1; j < N; ++j)
+            {
+                double v = Computer(pts[i], pts[j]) * log(Computer(pts[i], pts[j]) + E);
+                A(i, j) = v;
+                A(j, i) = v;
             }
             mat(i, 0) = 1;
-            mat(i, 1) = elem->second.X;
-            mat(i, 2) = elem->second.Y;
-            ++i;
-            //            cout << i << " " << j << endl;
+            mat(i, 1) = pts[i].X;
+            mat(i, 2) = pts[i].Y;
         }
-        //        cout << mat << endl;
-        //        cout << A << endl;
         mat1 << A, mat;
         mat2 << mat.transpose(), Z;
         mat3 << mat1
             , mat2;
-        //		cout << mat3 << endl;
-        Aplus = computePseudoinverse(mat3);
+        // mat3 is a symmetric bordered/saddle-point system (standard thin-plate
+        // -spline formulation). Solve it directly instead of explicitly
+        // forming a full SVD-based pseudo-inverse only to multiply it once by
+        // B -- same result, without the extra O(N^3) matrix product that was
+        // computed and thrown away after a single use.
         X.resize(N + 3,1);
-        X = Aplus * B;
+        X = mat3.ldlt().solve(B);
     }
 
+    // Mathematically identical to the original per-point double loop (every
+    // output point's value is still the exact sum over ALL training points
+    // using the fitted X) -- the thin-plate-spline kernel r^2*log(r^2+E)
+    // grows with distance, so truncating to nearest neighbors (e.g. via the
+    // KD-tree machinery elsewhere in this file) would change the result, not
+    // just speed it up. This instead reformulates the same O(M*N) computation
+    // as a few Eigen/BLAS matrix operations instead of a scalar double loop
+    // with a log() call per point pair.
     void Splinecurve::Result(Datapoint& dataresult, Datapoint& datapoint)
     {
-        int j = 0;
-        for (auto& entry : dataresult)
+        Eigen::VectorXd trainX(N), trainY(N);
         {
-            double index=0;
             int i = 0;
-            for (auto& elem :datapoint)
-            {
-                index += X(i) * Computer(entry.second, elem.second) * log(Computer(entry.second, elem.second)+E);
-                i++;
+            for (const auto& elem : datapoint) {
+                trainX(i) = elem.second.X;
+                trainY(i) = elem.second.Y;
+                ++i;
             }
-            entry.second.tMagnetic = X(N) + X(N + 1) * entry.second.X + X(N + 2) * entry.second.Y + index ;
-            j++;
+        }
+
+        const size_t M = dataresult.size();
+        Eigen::VectorXd outX(M), outY(M);
+        {
+            size_t i = 0;
+            for (const auto& entry : dataresult) {
+                outX(i) = entry.second.X;
+                outY(i) = entry.second.Y;
+                ++i;
+            }
+        }
+
+        // D(i,j) = |out_i - train_j|^2, via the standard broadcast expansion.
+        Eigen::MatrixXd D =
+            outX.array().square().matrix().replicate(1, N)
+            + trainX.array().square().matrix().transpose().replicate(M, 1)
+            - 2.0 * outX * trainX.transpose()
+            + outY.array().square().matrix().replicate(1, N)
+            + trainY.array().square().matrix().transpose().replicate(M, 1)
+            - 2.0 * outY * trainY.transpose();
+
+        Eigen::MatrixXd K = D.array() * (D.array() + E).log();
+        Eigen::VectorXd trend = Eigen::VectorXd::Constant(M, X(N))
+                                 + outX * X(N + 1) + outY * X(N + 2);
+        Eigen::VectorXd result = trend + K * X.topRows(N);
+
+        size_t i = 0;
+        for (auto& entry : dataresult) {
+            entry.second.tMagnetic = result(i);
+            ++i;
         }
     }
 
@@ -1045,28 +1116,59 @@ namespace Geomagnetic
         return ((a0*t + a1)*t + a2)*t + a3;
     }
 
+    // IDW weights decay as 1/dist^p, so (unlike the multiquadric/thin-plate
+    // kernels used elsewhere in this file, which grow or barely decay with
+    // distance) truncating to a bounded set of nearest neighbors is standard,
+    // accuracy-preserving practice for IDW -- the omitted far points'
+    // contributions are already negligible in the original unbounded sum.
+    // This replaces the previous unconditional O(grid_size^2 * N) brute-force
+    // scan (recomputing every point's distance for every grid cell) with a
+    // KD-tree nearest-neighbor query per cell.
     void CubicInterpolator2D::idw_fill_grid(const std::vector<double>& x, const std::vector<double>& y, const std::vector<double>& z,
                            const std::vector<double>& grid_x, const std::vector<double>& grid_y,
                            std::vector<double>& grid_z, int grid_size, double p)
     {
         grid_z.resize(grid_size * grid_size, 0.0);
+        if (x.empty()) {
+            std::fill(grid_z.begin(), grid_z.end(), std::numeric_limits<double>::quiet_NaN());
+            return;
+        }
+
+        std::vector<std::pair<double, double>> pts(x.size());
+        for (size_t k = 0; k < x.size(); ++k) {
+            pts[k] = {x[k], y[k]};
+        }
+        PointVectorAdapter adapter(pts);
+        typedef nanoflann::KDTreeSingleIndexAdaptor<
+            nanoflann::L2_Simple_Adaptor<double, PointVectorAdapter>,
+            PointVectorAdapter, 2, unsigned int> KDTree;
+        KDTree tree(2, adapter, nanoflann::KDTreeSingleIndexAdaptorParams(10));
+        tree.buildIndex();
+
+        const size_t kNeighbors = std::min<size_t>(x.size(), 32);
+        std::vector<unsigned int> nn_idx(kNeighbors);
+        std::vector<double> nn_dist2(kNeighbors);
+
         for (int i = 0; i < grid_size; ++i) {
             for (int j = 0; j < grid_size; ++j) {
                 double gx = grid_x[j];
                 double gy = grid_y[i];
+                double query[2] = {gx, gy};
+
+                size_t found = tree.knnSearch(query, kNeighbors, nn_idx.data(), nn_dist2.data());
+
                 double num = 0, denom = 0;
                 bool found_exact = false;
                 double exact_val = 0;
-                for (size_t k = 0; k < x.size(); ++k) {
-                    double dx = gx - x[k], dy = gy - y[k];
-                    double dist2 = dx*dx + dy*dy;
+                for (size_t t = 0; t < found; ++t) {
+                    double dist2 = nn_dist2[t];
                     if (dist2 < 1e-12) { // 点重合，直接赋值
                         found_exact = true;
-                        exact_val = z[k];
+                        exact_val = z[nn_idx[t]];
                         break;
                     }
                     double w = 1.0 / std::pow(dist2, p/2.0);
-                    num += w * z[k];
+                    num += w * z[nn_idx[t]];
                     denom += w;
                 }
                 grid_z[i * grid_size + j] = found_exact ? exact_val : (denom > 0 ? num/denom : std::numeric_limits<double>::quiet_NaN());

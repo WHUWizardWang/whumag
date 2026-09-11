@@ -3,6 +3,7 @@
 #include "ReadData.h"
 #include <fstream>
 #include <iomanip>
+#include <random>
 
 namespace Geomagnetic
 {
@@ -102,7 +103,14 @@ namespace Geomagnetic
         double* vAvgFitnessGen;
         Matrix<double, Dynamic, Dynamic> result; // 回归函数
 
-        double rand0_1(void) { return((1.0 * rand()) / RAND_MAX); } //在0-1上均匀分布的随机数
+        // 在0-1上均匀分布的随机数。使用线程局部的mt19937而不是全局rand()：
+        // rand()的内部状态是进程全局的，从多个线程并发调用是数据竞争（未定义行为），
+        // 而CalFitness现在会被并行地对每个粒子调用。
+        double rand0_1(void) {
+            thread_local std::mt19937 gen{std::random_device{}()};
+            thread_local std::uniform_real_distribution<double> dist(0.0, 1.0);
+            return dist(gen);
+        }
         double CalFitness(double sigma,double C);
         void RandomlyInitial(); // 初始化
         void Refresh(); // 更新粒子群 迭代寻优

@@ -306,8 +306,9 @@ private:
         // 搜索较近的子树
         nearestSearch(firstSearch, query, pq, k, depth + 1);
 
-        // 如果另一个子树可能包含更近的点，也搜索它
-        if (std::pow(diff, 2) < pq.top().first || pq.size() < k) {
+        // 如果另一个子树可能包含更近的点，也搜索它。
+        // pq.size() < k 必须放在前面短路求值：pq为空时 pq.top() 是未定义行为。
+        if (pq.size() < k || std::pow(diff, 2) < pq.top().first) {
             nearestSearch(secondSearch, query, pq, k, depth + 1);
         }
     }
@@ -326,14 +327,9 @@ public:
         delete root;
     }
 
-    // 查找k个最近邻
+    // 查找最多k个最近邻（树中点数少于k时，返回全部点，不再用哨兵值填充）
     std::vector<std::pair<T, size_t>> nearest(const std::array<T, Dim>& query, int k) const {
         std::priority_queue<std::pair<T, size_t>> pq;
-
-        // 使用最大可能距离初始化
-        for (int i = 0; i < k; ++i) {
-            pq.push({std::numeric_limits<T>::max(), 0});
-        }
 
         nearestSearch(root, query, pq, k, 0);
 

@@ -1,4 +1,7 @@
 #include "LSSVMPSO.h"
+#include <numeric>
+#include <algorithm>
+#include <random>
 namespace  Geomagnetic{
 
 
@@ -10,10 +13,25 @@ void LSSVMPSO::split(double n)
     MTestCoordinate.resize(nTestPointNum, 2);
     MTrainMagAnomaly.resize(nTrainPointNum, 1);
     MTestMagAnomaly.resize(nTestPointNum, 1);
-    MTrainCoordinate = MAllCoordinate.block(0, 0, nTrainPointNum, 2);
-    MTestCoordinate = MAllCoordinate.block(nTrainPointNum, 0, nTestPointNum, 2);
-    MTrainMagAnomaly = MAllMagAnomaly.block(0, 0, nTrainPointNum, 1);
-    MTestMagAnomaly = MAllMagAnomaly.block(nTrainPointNum, 0, nTestPointNum, 1);
+
+    // Randomly assign points to train/test instead of taking a contiguous
+    // block: points arrive in original survey-file order, so a plain
+    // block split can put e.g. only the last few survey lines into the test
+    // set, biasing the PSO fitness function toward measuring extrapolation
+    // to one edge of the survey rather than general interpolation quality.
+    std::vector<int> indices(nAllPointNum);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::mt19937 rng{std::random_device{}()};
+    std::shuffle(indices.begin(), indices.end(), rng);
+
+    for (int i = 0; i < nTrainPointNum; ++i) {
+        MTrainCoordinate.row(i) = MAllCoordinate.row(indices[i]);
+        MTrainMagAnomaly(i, 0) = MAllMagAnomaly(indices[i], 0);
+    }
+    for (int i = 0; i < nTestPointNum; ++i) {
+        MTestCoordinate.row(i) = MAllCoordinate.row(indices[nTrainPointNum + i]);
+        MTestMagAnomaly(i, 0) = MAllMagAnomaly(indices[nTrainPointNum + i], 0);
+    }
 }
 
 void LSSVMPSO::get_tempMagnetic()
@@ -164,14 +182,32 @@ void LSSVMPSO::save_para(Datapoint& datapoint,double& rms)
 
 double LSSVMPSO::CalFitness(double sigma, double C)
 {
-    //cout << sigma << "    " << C << endl;
-    get_B(sigma, C);
-    //cout << MB << endl;
-    // 求x
-    Matrix<double, Dynamic, Dynamic> Mx;
-    Mx.resize(nTrainPointNum + 1, 1);
-    Mx = (MB.transpose() * MB).ldlt().solve(MB.transpose() * ML);
-    //cout << Mx << endl;
+    // Builds its own LOCAL kernel matrix rather than writing to the shared
+    // `MB` member (which get_B() does): CalFitness is now called
+    // concurrently, once per particle, from Refresh()'s parallel loop, and
+    // every call needs an independent sigma/C so they cannot share one
+    // mutable matrix without racing.
+    Matrix<double, Dynamic, Dynamic> B = MatrixXd::Ones(nTrainPointNum + 1, nTrainPointNum + 1);
+    B(0, 0) = 0;
+    for (int i = 1; i < nTrainPointNum + 1; i++)
+    {
+        B(i, i) = 1 + 1 / C;
+    }
+    for (int i = 1; i < nTrainPointNum + 1; i++)
+    {
+        for (int j = i + 1; j < nTrainPointNum + 1; j++)
+        {
+            double v = Gauss(MTrainCoordinate(i - 1, 0), MTrainCoordinate(i - 1, 1),
+                              MTrainCoordinate(j - 1, 0), MTrainCoordinate(j - 1, 1), sigma);
+            B(i, j) = v;
+            B(j, i) = v;
+        }
+    }
+
+    // B is symmetric by construction; solving it directly (rather than via
+    // the normal equations B^T*B, as this used to do) avoids squaring its
+    // condition number and an extra O(n^3) matrix product per call.
+    Matrix<double, Dynamic, Dynamic> Mx = B.ldlt().solve(ML);
 
     Matrix<double, Dynamic, Dynamic> guess;
     guess.resize(nTestPointNum, nTrainPointNum + 1);
@@ -180,19 +216,13 @@ double LSSVMPSO::CalFitness(double sigma, double C)
         guess(j, 0) = 1;
         for (int i = 0; i < nTrainPointNum; i++)
         {
-           // cout << "x1: " << MTrainCoordinate(i, 0) << "   y1: " << MTrainCoordinate(i, 1) << endl <<
-            //    "x2: " << MTestCoordinate(j, 0) << "   y2: " << MTestCoordinate(j, 1) << endl;
             guess(j,i+1) = Gauss(MTrainCoordinate(i, 0), MTrainCoordinate(i, 1),
                 MTestCoordinate(j, 0), MTestCoordinate(j, 1), sigma);
-            //cout << guess(j, i + 1) << endl;
         }
     }
-    //cout << endl << guess << endl;
     Matrix<double, Dynamic, Dynamic> v;
     v.resize(nTestPointNum, 1);
     v = guess * Mx - MTestMagAnomaly;
-    //v = (guess * Mx - MTestMagAnomaly)*(maxMag-minMag)+ MatrixXd::Ones(nTestPointNum, 1) * minMag;
-    //cout << v << endl;
     Matrix<double, Dynamic, Dynamic> r;
     r.resize(1, 1);
     r = v.transpose() * v;
@@ -201,24 +231,32 @@ double LSSVMPSO::CalFitness(double sigma, double C)
 
 void LSSVMPSO::Refresh()
 {
-    int nGlobalBestParticleIndex = -1;
     double f1 = PGlobalBestParticle.dHistoryBestFitness;
+    // 用户在界面上配置的dWeightV作为惯性权重线性递减调度的起点（而不是像过去
+    // 那样每一代都被硬编码的0.9起点覆盖，导致这个参数完全不起作用），递减到
+    // 固定下限0.4 —— 保留了"惯性权重线性递减"这一被广泛认可的PSO改进，同时让
+    // 用户配置的值真正产生影响。
+    const double weightVStart = dWeightV;
+    const double weightVEnd = 0.4;
+
     // 循环多代
     for (int i = 0; i < nMaxGen; i++)
     {
-        std::cout << "第 " << i+1 << "/5代" << endl;
-        double dSumFitness = 0;
-        dWeightV = (0.9 - 0.4) * (nMaxGen - i) / nMaxGen + 0.4; // (初始权值 - 最终权值) * (nMaxGen - i) / nMaxGen + 最终权值
+        std::cout << "第 " << i+1 << "/" << nMaxGen << "代" << endl;
+        dWeightV = (weightVStart - weightVEnd) * (nMaxGen - i) / nMaxGen + weightVEnd;
 
-        // 循环每个粒子
+        // 每个粒子的适应度评估互相独立（只读取上一代结束时才更新一次的
+        // PGlobalBestParticle，本代内部不会被修改），因此可以安全并行化 ——
+        // 这是本模块里迄今为止最昂贵的计算（每次调用CalFitness都要重建核矩阵
+        // 并做一次O(n^3)求解，共调用 nParticleNum*nMaxGen 次）。
+        // rand0_1()内部已改为线程局部的mt19937；CalFitness内部已改为构建局部
+        // 核矩阵而不是写共享成员MB，两者都是让这里能够安全并行的前提条件。
+        #pragma omp parallel for schedule(dynamic)
         for (int j = 0; j < nParticleNum; j++)
         {
             // 循环每个维度
             for (int k = 0; k < vGroup[0].nDim; k++)
             {
-                // dWeightV = 1.2 - i * (1.2 - 0.8) / nMaxGen; //带惯性权重的粒子群算法
-
-                // dWeightV = 1;
                 vGroup[j].vVelocity[k] = dWeightV * vGroup[j].vVelocity[k] +
                     dC1 * rand0_1() * (vGroup[j].bHistoryBestPosition[k] - vGroup[j].vPosition[k]) +
                     dC2 * rand0_1() * (PGlobalBestParticle.bHistoryBestPosition[k] - vGroup[j].vPosition[k]);
@@ -231,27 +269,24 @@ void LSSVMPSO::Refresh()
                     vGroup[j].vPosition[k] = vPositionMaxValue[k];
                 if (vGroup[j].vPosition[k] < vPositionMinValue[k])
                     vGroup[j].vPosition[k] = vPositionMinValue[k];
-                // 自适应粒子变异
-                /*
-                if (rand0_1() > 0.5)
-                    dk = ceil(2 * rand0_1());
-
-                if (dk == 1)
-                    vGroup[j].vPosition[int(dk)] = (20 - 1) * rand0_1() + 1;
-
-                if (dk == 2)
-                    vGroup[j].vPosition[1] = (vPositionMaxValue[1] - vPositionMinValue[1]) * rand0_1() + vPositionMinValue[1];
-                */
             }
             vGroup[j].dFitness = CalFitness(vGroup[j].vPosition[0], vGroup[j].vPosition[1]);
-            dSumFitness += vGroup[j].dFitness;
             // 适应度和位置更新
             if (vGroup[j].dFitness < vGroup[j].dHistoryBestFitness)
             {
                 vGroup[j].dHistoryBestFitness = vGroup[j].dFitness;
                 vGroup[j].bHistoryBestPosition = vGroup[j].vPosition;
             }
+        }
 
+        // 全局最优粒子的查找放到并行区之外顺序执行（避免多线程竞争写同一个
+        // 索引变量），逻辑与原来完全一致：按粒子编号顺序找到最后一个历史最优
+        // 适应度优于当前全局最优的粒子。
+        int nGlobalBestParticleIndex = -1;
+        double dSumFitness = 0;
+        for (int j = 0; j < nParticleNum; j++)
+        {
+            dSumFitness += vGroup[j].dFitness;
             if (vGroup[j].dHistoryBestFitness < PGlobalBestParticle.dHistoryBestFitness)
                 nGlobalBestParticleIndex = j;
         }
@@ -356,9 +391,9 @@ void LSSVMPSO::RegressionFunc(Datapoint& datapoint)
     double dSigma = PGlobalBestParticle.bHistoryBestPosition[0];
     double dC = PGlobalBestParticle.bHistoryBestPosition[1];
     get_B(dSigma,dC);
-    Matrix<double, Dynamic, Dynamic> Mx;
-    Mx.resize(nTrainPointNum + 1, 1);
-    Mx = (MB.transpose() * MB).ldlt().solve(MB.transpose() * ML);
+    // MB is symmetric by construction; solve it directly rather than via the
+    // normal equations (which needlessly squares its condition number).
+    Matrix<double, Dynamic, Dynamic> Mx = MB.ldlt().solve(ML);
 
     int nTestNum = datapoint.size();
     Matrix<double, Dynamic, Dynamic> tmp;
@@ -385,11 +420,9 @@ void LSSVMPSO::cal(Datapoint& trainData,Datapoint& datapoint,double para1,double
     double dC = para2;
     get_B2(dSigma,dC);
     get_L2();
-    Matrix<double, Dynamic, Dynamic> Mx;
-
-    Mx.resize(nAllPointNum + 1, 1);
-
-    Mx = (MB.transpose() * MB).ldlt().solve(MB.transpose() * ML);
+    // MB is symmetric by construction; solve it directly rather than via the
+    // normal equations (which needlessly squares its condition number).
+    Matrix<double, Dynamic, Dynamic> Mx = MB.ldlt().solve(ML);
 
     int nTestNum = datapoint.size();
     Matrix<double, Dynamic, Dynamic> tmp;

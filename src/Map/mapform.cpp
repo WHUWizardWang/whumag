@@ -2,6 +2,7 @@
 #include "ui_mapform.h"
 
 #include <QGuiApplication>
+#include <QCoreApplication>
 #include <QQmlApplicationEngine>
 
 MapForm::MapForm(QWidget *parent) :
@@ -11,6 +12,11 @@ MapForm::MapForm(QWidget *parent) :
 {
     ui->setupUi(this);
     ui->quickWidget->engine()->rootContext()->setContextProperty("qmlPolygon", this->qml_polygon_);
+    // Qt.application.dirPath is not a real QML property (it silently
+    // evaluates to undefined), which was why the offline map tile directory
+    // ("undefined/offline_tiles") never resolved to anything real. Expose
+    // the actual executable directory as a context property instead.
+    ui->quickWidget->engine()->rootContext()->setContextProperty("appDirPath", QCoreApplication::applicationDirPath());
     initQmlMap();
     ui->quickWidget->setSource(QUrl(QStringLiteral("qrc:/Map/main.qml")));
 

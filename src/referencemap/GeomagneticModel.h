@@ -193,20 +193,11 @@ namespace Geomagnetic {
         // coefficients[i][j] represents the coefficient for (x^i * y^j)
         std::vector<std::vector<double>> coefficients;
 
-        // Calculate factorial
-        double factorial(int n);
-
-        // Calculate binomial coefficient C(n,k)
-        double binomialCoeff(int n, int k);
-
         // Normalize input coordinate to [0, 1] range
         double normalizeCoordinate(double value, double minVal, double maxVal);
 
         // Map [0, 1] back to original coordinate range
         double denormalizeCoordinate(double value, double minVal, double maxVal);
-
-        // Calculate Taylor coefficient for term (x^p * y^q)
-        double calculateCoefficient(const Datapoint& datapoints, int p, int q);
 
     public:
         TaylorModel();
