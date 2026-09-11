@@ -56,3 +56,10 @@ release/
 # Runtime redistributable DLLs are tracked on purpose (deploy/) so the app
 # still runs after a fresh clone -- override the blanket *.dll ignore above.
 !/deploy/*.dll
+
+# Too large for GitHub (>100MB), distributed separately -- see README for
+# where to obtain it. AutoReferenceMap::loadResourceFile() needs this at
+# <app dir>/resources/high_quality.rcc to run; place a copy at
+# resources/high_quality.rcc in the source tree so whumag.pro's
+# QMAKE_POST_LINK step can deploy it next to the built executable.
+/resources/high_quality.rcc
