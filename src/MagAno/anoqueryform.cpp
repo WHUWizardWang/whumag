@@ -144,7 +144,12 @@ void AnoQueryForm::on_pushButton_3_clicked()
         // plot -- just one built from whatever was in ano_pnts beforehand
         // (uninitialized-then-zeroed coordinates), which looked like an
         // empty/blank result instead of a clear error.
-        if (ret == 0)
+        //
+        // ret == -2 means the connection was fine up front but dropped
+        // partway through the query (see MagAnoQuery::omg_query_impl) --
+        // still draw what came back, but say so instead of claiming full
+        // success.
+        if (ret == 0 || ret == -2)
         {
             if (ano_pnts.size() > 4)
             {
@@ -157,11 +162,14 @@ void AnoQueryForm::on_pushButton_3_clicked()
                 draw_form_->show();
             }
             fill_item_model(ano_pnts);
-            ui->textBrowser->append(QTime::currentTime().toString("hh:mm:ss") + "\t完成计算。有效查询数量共计：" + QString::number(length));
+            if (ret == -2)
+                ui->textBrowser->append(QTime::currentTime().toString("hh:mm:ss") + "\t查询部分完成：数据库连接在查询过程中中断，结果可能不完整，建议重新查询。共计：" + QString::number(length));
+            else
+                ui->textBrowser->append(QTime::currentTime().toString("hh:mm:ss") + "\t完成计算。有效查询数量共计：" + QString::number(length));
         }
         else
         {
-            ui->textBrowser->append(QTime::currentTime().toString("hh:mm:ss") + "\t查询失败：无法连接数据库，请检查数据库服务及连接配置（WHUMAG_DB_PASSWORD 环境变量等）。");
+            ui->textBrowser->append(QTime::currentTime().toString("hh:mm:ss") + "\t查询失败：无法连接数据库，请检查数据库服务及连接配置。");
         }
     }
 }

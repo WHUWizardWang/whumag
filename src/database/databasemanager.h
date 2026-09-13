@@ -85,6 +85,21 @@ public:
         return db;
     }
 
+    // Re-opens the connection using its already-configured parameters if it
+    // isn't currently open -- e.g. the server dropped an idle connection
+    // mid-session. isOpen() alone won't detect that case (it only reflects
+    // the client-side handle), so callers should call this after a query
+    // fails, not just check isOpen() up front. Cannot establish a
+    // connection from scratch; that still requires initConnection().
+    bool ensureConnected() {
+        QMutexLocker locker(&mutex);
+        if (db.isOpen())
+            return true;
+        if (!db.isValid())
+            return false;
+        return db.open();
+    }
+
 private:
     DatabaseManager() {}
     DatabaseManager(const DatabaseManager&) = delete;

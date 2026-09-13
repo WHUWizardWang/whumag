@@ -2,32 +2,48 @@
 #define MAGANOQUERY_H
 
 #include <QVector>
+#include <QHash>
+#include <QList>
 #include "OmgValidator.h"
 #include "database/databasemanager.h"
 #include <QtMath>
 #include <QDebug>
+#include <QSqlRecord>
 #include <functional>
 
 class MagAnoQuery
 {
 private:
-    // Returns 0 on success (queries were actually run -- individual points
-    // with no matching DB row are expected/normal and just keep z=0, that's
-    // not a failure), or -1 if the database connection itself failed, in
-    // which case NO point was queried at all.
-    //
-    // Previously this always `return 0`, even when initConnection() failed
-    // -- the caller (AnoQueryForm::on_pushButton_3_clicked) treated that as
-    // full success and drew a heatmap/contour from it regardless. Combined
-    // with AnoPoint's x/y/z having no default member initializers at the
-    // time, a failed connection (e.g. WHUMAG_DB_PASSWORD not set, or the DB
-    // simply not running) meant every point kept whatever uninitialized
-    // stack garbage it started with -- which, since freshly-committed OS
-    // memory pages are often zero-filled, frequently rendered as a blank/
-    // empty plot instead of a visible error. AnoPoint now default-
-    // initializes to 0 regardless, but the caller still needs to know the
-    // connection failed so it can tell the user instead of silently
-    // "succeeding" with an empty result.
+    // Batch size for "index_ij IN (?,...)" queries -- turns what used to be
+    // one round trip per point (thousands, for a large grid query) into one
+    // round trip per this many points.
+    static constexpr int kBatchSize = 500;
+
+    // Retries a failed exec() once, after attempting a single reconnect --
+    // covers a connection that was fine at initConnection() time but was
+    // silently dropped by the server mid-query (isOpen() alone doesn't
+    // detect that). reconnectAttempted bounds this to one retry per call.
+    static bool execWithReconnect(QSqlQuery &query, bool &reconnectAttempted)
+    {
+        if (query.exec())
+            return true;
+        qWarning() << "MagAnoQuery: query failed:" << query.lastError().text();
+        if (reconnectAttempted)
+            return false;
+        reconnectAttempted = true;
+        if (!DatabaseManager::instance().ensureConnected())
+            return false;
+        qWarning() << "MagAnoQuery: reconnected to database, retrying batch once";
+        return query.exec();
+    }
+
+    // Runs indexCalc/assign for each point using a small number of batched
+    // queries instead of one query per point. Return value: 0 = every batch
+    // executed (a point with no matching row just keeps z=0, that's normal);
+    // -1 = could not connect to the database at all, nothing was queried;
+    // -2 = connected fine but at least one batch failed mid-query (e.g. the
+    // connection dropped) -- some points may still be filled, but the
+    // result should be treated as incomplete, not "no data here".
     static int omg_query_impl(QVector<AnoPoint> &ano_pnts,
                                const QString &tableName,
                                const std::function<int(double x, double y)> &indexCalc,
@@ -39,20 +55,58 @@ private:
             return -1;
         }
 
-        qDebug() << "Database connection successful!";
         QSqlDatabase db = DatabaseManager::instance().getDatabase();
-        QSqlQuery query(db);
+
+        // Several query points can round to the same DB grid cell, so map
+        // each index back to every point that needs it rather than assuming
+        // a 1:1 correspondence.
+        QHash<int, QVector<int>> idxToPoints;
+        idxToPoints.reserve(ano_pnts.size());
         for (int i = 0; i < ano_pnts.size(); ++i)
         {
             ano_pnts[i].z = 0.0;
-            int idx = indexCalc(ano_pnts[i].x, ano_pnts[i].y);
-            QString str = QString("select * from %1 where index_ij = %2;").arg(tableName).arg(idx);
-            query.prepare(str);
-            query.exec();
-            if (query.next())
-                assign(ano_pnts[i], query);
+            idxToPoints[indexCalc(ano_pnts[i].x, ano_pnts[i].y)].append(i);
         }
-        return 0;
+        QList<int> allIdx = idxToPoints.keys();
+        if (allIdx.isEmpty())
+            return 0;
+
+        bool anyBatchFailed = false;
+        bool reconnectAttempted = false;
+        bool inTransaction = db.transaction();
+        QSqlQuery query(db);
+        for (int offset = 0; offset < allIdx.size(); offset += kBatchSize)
+        {
+            QList<int> batch = allIdx.mid(offset, kBatchSize);
+            QString placeholders = QString("?,").repeated(batch.size());
+            placeholders.chop(1);
+            // "*, index_ij AS ..." keeps every original column (and its
+            // position) exactly as the assign() lambdas below expect, while
+            // adding one extra trailing column we use to map each returned
+            // row back to the point(s) that asked for it.
+            query.prepare(QString("select *, index_ij as __batch_index_ij from %1 where index_ij in (%2)")
+                              .arg(tableName, placeholders));
+            for (int idx : batch)
+                query.addBindValue(idx);
+
+            if (!execWithReconnect(query, reconnectAttempted))
+            {
+                anyBatchFailed = true;
+                continue;
+            }
+
+            while (query.next())
+            {
+                int idxColumn = query.record().count() - 1;
+                int returnedIdx = query.value(idxColumn).toInt();
+                for (int pointIndex : idxToPoints.value(returnedIdx))
+                    assign(ano_pnts[pointIndex], query);
+            }
+        }
+        if (inTransaction)
+            db.commit();
+
+        return anyBatchFailed ? -2 : 0;
     }
 
 public:

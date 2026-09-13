@@ -8,52 +8,55 @@ database::database(QWidget *parent) :
 {
     // 1.<设置表格内容>
     ui->setupUi(this);
-//    if (DatabaseManager::instance().initConnection())
+
+    // model is always created (even on connection failure) so the other
+    // slots -- which all dereference it unconditionally -- stay safe; it
+    // just won't have a table set, so the view stays empty instead of the
+    // app crashing on first click.
+    model = new QSqlTableModel(this);
+    ui->tableView->setModel(model);
+
+    if (!DatabaseManager::instance().initConnection())
     {
-        qDebug() << "Database connection successful!";
-        QSqlDatabase db = DatabaseManager::instance().getDatabase();
-        QSqlQuery query(db);
-        if (db.open())
-        {
-            qDebug()<<"seccess!";
-        } else
-        {
-            qDebug()<<"failed!";
-            qDebug()<<db.lastError();
-        }
-        // 设置表格模型
-        model = new QSqlTableModel(this);
-        model->setTable("file_metadata"); // 指定使用表格
-        // 把model放在view里面
-        ui->tableView->setModel(model);
-        // 显示model里面的语句
-        model->select();
-        ui->tableView->setItemDelegateForColumn(0,new EnumComboBoxDelegate({{"实测数据","实测数据"},{"处理后数据","处理后数据"}}, model));
-        ui->tableView->setItemDelegateForColumn(8,new EnumComboBoxDelegate({{"船磁","船磁"},{"航磁","航磁"},{"水下磁测","水下磁测"}}, model));
-        model->setHeaderData(0,Qt::Horizontal,"数据类型");
-        model->setHeaderData(1,Qt::Horizontal,"数据名称");
-        model->setHeaderData(2,Qt::Horizontal,"保存路径");
-        model->setHeaderData(3,Qt::Horizontal,"导入时间");
-        model->setHeaderData(4,Qt::Horizontal,"min_X");
-        model->setHeaderData(5,Qt::Horizontal,"max_X");
-        model->setHeaderData(6,Qt::Horizontal,"min_Y");
-        model->setHeaderData(7,Qt::Horizontal,"max_Y");
-        model->setHeaderData(8,Qt::Horizontal,"测量平台");
-        // 设置表格的列宽
-        ui->tableView->setColumnWidth(0,100);
-        ui->tableView->setColumnWidth(1,200);
-        ui->tableView->setColumnWidth(2,500);
-        ui->tableView->setColumnWidth(3,200);
-        ui->tableView->setColumnWidth(4,100);
-        ui->tableView->setColumnWidth(5,100);
-        ui->tableView->setColumnWidth(6,100);
-        ui->tableView->setColumnWidth(7,100);
-        ui->tableView->setColumnWidth(8,100);
-        // 设置model编辑模式为手动提交修改
-        model->setEditStrategy(QSqlTableModel::OnManualSubmit);
-        // 设置view中的数据库不允许修改
-        // ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        QMessageBox::critical(this, tr("数据库错误"),
+            tr("无法连接到数据库，数据列表将无法加载：%1")
+                .arg(DatabaseManager::instance().getDatabase().lastError().text()));
     }
+    else
+    {
+        model->setTable("file_metadata"); // 指定使用表格
+        if (!model->select())
+        {
+            QMessageBox::warning(this, tr("数据库错误"),
+                tr("加载数据列表失败：%1").arg(model->lastError().text()));
+        }
+    }
+    ui->tableView->setItemDelegateForColumn(0,new EnumComboBoxDelegate({{"实测数据","实测数据"},{"处理后数据","处理后数据"}}, model));
+    ui->tableView->setItemDelegateForColumn(8,new EnumComboBoxDelegate({{"船磁","船磁"},{"航磁","航磁"},{"水下磁测","水下磁测"}}, model));
+    model->setHeaderData(0,Qt::Horizontal,"数据类型");
+    model->setHeaderData(1,Qt::Horizontal,"数据名称");
+    model->setHeaderData(2,Qt::Horizontal,"保存路径");
+    model->setHeaderData(3,Qt::Horizontal,"导入时间");
+    model->setHeaderData(4,Qt::Horizontal,"min_X");
+    model->setHeaderData(5,Qt::Horizontal,"max_X");
+    model->setHeaderData(6,Qt::Horizontal,"min_Y");
+    model->setHeaderData(7,Qt::Horizontal,"max_Y");
+    model->setHeaderData(8,Qt::Horizontal,"测量平台");
+    // 设置表格的列宽
+    ui->tableView->setColumnWidth(0,100);
+    ui->tableView->setColumnWidth(1,200);
+    ui->tableView->setColumnWidth(2,500);
+    ui->tableView->setColumnWidth(3,200);
+    ui->tableView->setColumnWidth(4,100);
+    ui->tableView->setColumnWidth(5,100);
+    ui->tableView->setColumnWidth(6,100);
+    ui->tableView->setColumnWidth(7,100);
+    ui->tableView->setColumnWidth(8,100);
+    // 设置model编辑模式为手动提交修改
+    model->setEditStrategy(QSqlTableModel::OnManualSubmit);
+    // 设置view中的数据库不允许修改
+    // ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
     // 2.<设置comboBox内容>
     ui->comboBox_datatype->addItem("实测数据");
     ui->comboBox_datatype->addItem("处理后数据");
@@ -189,16 +192,19 @@ void database::on_pushButton_filter_clicked()
         filterstr_list.push_back("platform IN (" + str +")");
     }
     //数据名称
+    // setFilter() takes a raw SQL WHERE fragment with no parameter binding,
+    // so a literal "'" typed into these free-text fields would otherwise
+    // break out of the LIKE string and let arbitrary SQL be appended.
     QString name = ui->lineEdit_name->text();
     if(!name.isEmpty())
     {
-        filterstr_list.push_back(QObject::tr("name LIKE '%%1%'").arg(name));
+        filterstr_list.push_back(QObject::tr("name LIKE '%%1%'").arg(name.replace("'", "''")));
     }
     //数据路径
     QString path = ui->lineEdit_path->text();
     if(!path.isEmpty())
     {
-        filterstr_list.push_back(QObject::tr("path LIKE '%%1%'").arg(path));
+        filterstr_list.push_back(QObject::tr("path LIKE '%%1%'").arg(path.replace("'", "''")));
     }
     //x范围
     if(ui->checkBox_x->isChecked())
