@@ -1,4 +1,4 @@
-QT       += core gui quickwidgets location positioning sql printsupport network quick qml concurrent
+QT       += core gui quickwidgets location positioning sql printsupport network quick qml concurrent svg
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets printsupport
 
@@ -18,10 +18,23 @@ DEFINES += QT_DEPRECATED_WARNINGS
 INCLUDEPATH += \
     $$PWD/src \
     $$PWD/src/app \
+    $$PWD/src/ui \
     $$PWD/third_party \
     $$PWD/third_party/qcustomplot
 
 SOURCES += \
+    src/ui/thememanager.cpp \
+    src/ui/uiicons.cpp \
+    src/ui/uiwidgets.cpp \
+    src/ui/connectdialog.cpp \
+    src/ui/workflowrail.cpp \
+    src/ui/ribbon.cpp \
+    src/ui/explorerpanel.cpp \
+    src/ui/welcomepage.cpp \
+    src/ui/tasklistwidget.cpp \
+    src/ui/logtextbrowser.cpp \
+    src/app/mainwindow_shell.cpp \
+    src/app/uitesthooks.cpp \
     src/3DView/glwidget.cpp \
     src/3DView/omgglctrl.cpp \
     src/3DView/omgglwidget.cpp \
@@ -102,6 +115,17 @@ SOURCES += \
     src/wmm/wmm_point.c
 
 HEADERS += \
+    src/ui/thememanager.h \
+    src/ui/uiicons.h \
+    src/ui/uiwidgets.h \
+    src/ui/connectdialog.h \
+    src/ui/workflowrail.h \
+    src/ui/ribbon.h \
+    src/ui/explorerpanel.h \
+    src/ui/welcomepage.h \
+    src/ui/tasklistwidget.h \
+    src/ui/logtextbrowser.h \
+    src/app/uitesthooks.h \
     src/3DView/glwidget.h \
     src/3DView/omgglctrl.h \
     src/3DView/omgglwidget.h \
@@ -271,7 +295,8 @@ DISTFILES += \
 RESOURCES += \
     resources/cof.qrc \
     resources/icons.qrc \
-    resources/qml.qrc
+    resources/qml.qrc \
+    resources/theme.qrc
 DEFINES += BYTE_DEFINED
 CONFIG += openssl-linked  # 静态链接 OpenSSL
 # INCLUDEPATH += /usr/local/lib \

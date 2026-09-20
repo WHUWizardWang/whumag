@@ -18,11 +18,11 @@
     <item row="0" column="1">
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tab_image">
        <attribute name="title">
-        <string>图形显示</string>
+        <string>地图</string>
        </attribute>
        <layout class="QHBoxLayout" name="horizontalLayout_3">
         <property name="spacing">
@@ -51,7 +51,7 @@
       </widget>
       <widget class="QWidget" name="tab_3d">
        <attribute name="title">
-        <string>三维显示</string>
+        <string>三维</string>
        </attribute>
        <layout class="QHBoxLayout" name="horizontalLayout_5">
         <property name="spacing">
@@ -99,7 +99,7 @@
      <widget class="QListWidget" name="taskListWidget"/>
     </item>
     <item row="1" column="1">
-     <widget class="QTextBrowser" name="textBrowser"/>
+     <widget class="LogTextBrowser" name="textBrowser"/>
     </item>
    </layout>
   </widget>
@@ -506,6 +506,11 @@
   </action>
  </widget>
  <customwidgets>
+  <customwidget>
+   <class>LogTextBrowser</class>
+   <extends>QTextBrowser</extends>
+   <header>logtextbrowser.h</header>
+  </customwidget>
   <customwidget>
    <class>OmgGLWidget</class>
    <extends>QWidget</extends>

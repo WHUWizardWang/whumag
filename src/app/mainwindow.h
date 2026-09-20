@@ -40,11 +40,21 @@
 #include "referencemap/globalmodel/autoreferencemap.h"
 QT_BEGIN_NAMESPACE
 class ImportForm;
+class QLabel;
+class QLineEdit;
+class QSplitter;
+class QStackedWidget;
 namespace Ui
 {
     class MainWindow;
 }
 QT_END_NAMESPACE
+
+class ExplorerPanel;
+class Ribbon;
+class WelcomePage;
+class TaskListWidget;
+class WorkflowRail;
 
 class MainWindow : public QMainWindow
 {
@@ -55,6 +65,9 @@ public:
     void updateTextBrowser(const QString &text);            // 更新主界面的文本框区域
     ~MainWindow();
 
+public slots:
+    void openProjectPath(const QString &projFile);          // 打开 .proj（历史工程 / 起始页共用）
+
 private slots:
     void on_action_newproject_triggered();                  // 打开新建工程窗口
     void CreateNewProject(GeoMagnetismProject *gmproj);     // 新建工程
@@ -64,8 +77,6 @@ private slots:
     void on_action_import_triggered();                      // 打开导入窗口
     void on_action_query_triggered();                       // 打开查询窗口
     void on_action_anoquery_triggered();                    // 打开查询窗口
-    void On_DouClickedTreeOpen_Slots(QTreeWidgetItem *);    // 展开树节点
-    void On_DouClickedTreeClose_Slots(QTreeWidgetItem *);   // 关闭树节点
     void adddata(const QString &tablename,const QString &inputs,double &dx,double &dy);
     double calculateRMS(const Geomagnetic::Datapoint &datapoints, const Geomagnetic::Datapoint &dataresults);
 
@@ -120,8 +131,24 @@ private slots:
     void on_action_xishukongzhong_triggered();
 
     void on_action_3_triggered();
+    void on_action_6_triggered();                           // 文件：导出所选数据
 
 private:
+    // ---- 界面外壳（mainwindow_shell.cpp）：工作流导轨、命令栏、工程面板、任务与日志、状态栏
+    void setupShell();
+    void setupMenus();
+    void setupRibbon();
+    void setupBottomPanel(QWidget *&tasksPanel, QWidget *&logPanel);
+    void setupStatusBar();
+    void setupCommandSearch();
+    void refreshShell();                                    // 工程变化后：标题、起始页、进度、状态栏
+    void refreshTreeIcons();
+    void updatePipelineState();
+    void updateStatusBar();
+    void onTreeSelectionChanged();
+    QString selectedDataFilePath() const;
+    void registerCommand(const QString &label, const QString &stage, QAction *action);
+
     void ProjectChanged();                                  // 更新工程树及历史工程信息
     void ProjectChanged_data();                             // 更新实测数据树的信息
     void ProjectChanged_processed();                        // 更新处理后数据树的信息
@@ -141,7 +168,23 @@ private:
     ReferenceMap        *referenceMap_form_;                // 整取建模窗口
     AutoReferenceMap    *autoReferenceMap_form_;            // 自动建模窗口
 
-    QListWidget         *taskList;                         // 任务列表
+    QListWidget         *taskList = nullptr;                // 任务列表（指向 taskListView_）
+    WorkflowRail        *rail_ = nullptr;                   // 左侧工作流导轨
+    Ribbon              *ribbon_ = nullptr;                 // 命令栏
+    ExplorerPanel       *explorer_ = nullptr;               // 工程面板
+    WelcomePage           *welcomePage_ = nullptr;              // 起始页（未打开工程时显示）
+    QStackedWidget      *centerStack_ = nullptr;
+    TaskListWidget      *taskListView_ = nullptr;
+    QSplitter           *bodySplitter_ = nullptr;
+    QSplitter           *centerSplitter_ = nullptr;
+    QLabel              *dbLabel_ = nullptr;                // 状态栏：数据库
+    QLabel              *projectLabel_ = nullptr;           // 状态栏：工程
+    QLabel              *taskCountLabel_ = nullptr;         // 状态栏：后台任务
+    QLineEdit           *commandSearch_ = nullptr;          // 菜单栏右侧的“搜索功能”
+    QVector<QPair<QString, QAction *>> commands_;           // 可搜索的命令
+    bool closing_ = false;                                  // 析构中：外壳的槽函数不再访问已销毁的控件
+    bool mapBuilt_ = false;                                 // 本次运行中是否已构建过基准图（用于进度显示）
+    bool evaluated_ = false;                                // 本次运行中是否已完成精度评估
     GeoMagnetismProject *geomag_proj_;                      // 地磁工程类实例，记录工程各类参数
     QString             last_opened_path_;                  // 上次打开的文件夹路径
     QString             historical_proj_file_path_;         // 记录历史工程路径的文件路径

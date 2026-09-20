@@ -16,6 +16,10 @@ public:
         return instance;
     }
 
+    // 离线模式：用户选择“离线工作”后，所有需要数据库的功能都直接报告不可用，不再尝试连接。
+    void setOffline(bool value) { offline_ = value; }
+    bool isOffline() const { return offline_; }
+
     bool initConnection() {
         QMutexLocker locker(&mutex);
 
@@ -23,11 +27,15 @@ public:
         if (db.isOpen()) {
             return true;
         }
+        if (offline_) {
+            return false;
+        }
 
         QStringList drivers = QSqlDatabase::drivers();
 //        foreach(QString str,drivers)
 //            qDebug()<<str;
-        QSqlDatabase db = QSqlDatabase::addDatabase("QPSQL");
+        QSqlDatabase db = QSqlDatabase::contains() ? QSqlDatabase::database(QLatin1String(QSqlDatabase::defaultConnection), false)
+                                                   : QSqlDatabase::addDatabase("QPSQL");
         db.setHostName("localhost");
         db.setDatabaseName("whumag");
         db.setUserName("postgres");
@@ -59,11 +67,15 @@ public:
         if (db.isOpen()) {
             return true;
         }
+        if (offline_) {
+            return false;
+        }
 
         QStringList drivers = QSqlDatabase::drivers();
         //        foreach(QString str,drivers)
         //            qDebug()<<str;
-        QSqlDatabase db = QSqlDatabase::addDatabase("QPSQL");
+        QSqlDatabase db = QSqlDatabase::contains() ? QSqlDatabase::database(QLatin1String(QSqlDatabase::defaultConnection), false)
+                                                   : QSqlDatabase::addDatabase("QPSQL");
         db.setHostName(host);
         db.setDatabaseName("whumag");
         db.setUserName(user);
@@ -107,6 +119,7 @@ private:
 
     QSqlDatabase db;
     QMutex mutex;
+    bool offline_ = false;
 };
 
 #endif // DATABASEMANAGER_H

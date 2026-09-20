@@ -2,6 +2,7 @@
 #define REALTIME_REDIRECTOR_H
 #include <QTextBrowser>
 #include <QApplication>
+#include "logtextbrowser.h"
 #include <iostream>
 #include <streambuf>
 #include <string>
@@ -15,7 +16,7 @@ protected:
         if (c != EOF) {
             if (c == '\n') {
                 // 换行时将缓冲的内容输出到TextBrowser
-                textBrowser->append(QString::fromStdString(buffer));
+                emitLine(buffer);
                 buffer.clear();
                 QApplication::processEvents(); // 使UI能够更新
             } else {
@@ -30,7 +31,7 @@ protected:
         size_t pos;
         while ((pos = buffer.find('\n')) != std::string::npos) {
             std::string line = buffer.substr(0, pos);
-            textBrowser->append(QString::fromStdString(line));
+            emitLine(line);
             buffer.erase(0, pos + 1);
             QApplication::processEvents(); // 使UI能够更新
         }
@@ -38,6 +39,16 @@ protected:
     }
 
 private:
+    // Lines written to std::cout go through the log widget's own append() so they get the
+    // time stamp / level colouring (a plain QTextBrowser* call would bypass it).
+    void emitLine(const std::string &line) {
+        const QString text = QString::fromStdString(line);
+        if (auto *log = dynamic_cast<LogTextBrowser *>(textBrowser))
+            log->append(text);
+        else
+            textBrowser->append(text);
+    }
+
     QTextBrowser* textBrowser;
     std::string buffer;
 };

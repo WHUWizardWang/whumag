@@ -16,7 +16,11 @@ database::database(QWidget *parent) :
     model = new QSqlTableModel(this);
     ui->tableView->setModel(model);
 
-    if (!DatabaseManager::instance().initConnection())
+    if (DatabaseManager::instance().isOffline())
+    {
+        // 离线工作：不加载数据列表，也不弹出错误提示
+    }
+    else if (!DatabaseManager::instance().initConnection())
     {
         QMessageBox::critical(this, tr("数据库错误"),
             tr("无法连接到数据库，数据列表将无法加载：%1")

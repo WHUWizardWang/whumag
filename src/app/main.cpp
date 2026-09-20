@@ -10,6 +10,10 @@
 #include <QApplication>
 #include <QtPlugin>
 #include "contourplotter.h"
+#include "connectdialog.h"
+#include "thememanager.h"
+#include "uitesthooks.h"
+#include <QTimer>
 
 #ifdef _WIN32
 #include <io.h>
@@ -39,65 +43,25 @@ void allocateConsole() {
 }
 #endif
 
-class ConnectDialog : public QDialog {
-public:
-    ConnectDialog(QWidget* parent = nullptr) : QDialog(parent) {
-        setWindowTitle(tr("数据库连接设置"));
-
-        // 布局和控件
-        auto *form = new QFormLayout(this);
-        hostEdit = new QLineEdit(this);
-        portEdit = new QLineEdit(this);
-        userEdit = new QLineEdit(this);
-        passEdit = new QLineEdit(this);
-        passEdit->setEchoMode(QLineEdit::Password);
-
-        // 新增：记住设置复选框
-        rememberBox = new QCheckBox(tr("记住设置"), this);
-
-        form->addRow(tr("主机地址:"), hostEdit);
-        form->addRow(tr("端口:"),   portEdit);
-        form->addRow(tr("用户名:"), userEdit);
-        form->addRow(tr("密码:"),   passEdit);
-        form->addRow(QString(), rememberBox);
-
-        auto *buttons = new QDialogButtonBox(
-            QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
-            Qt::Horizontal, this);
-        form->addWidget(buttons);
-
-        connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
-        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-
-        // —— 启动时读取上次保存的参数 ——
-        QSettings settings("YourCompany", "YourApp");
-        hostEdit->setText(settings.value("db/host",     "localhost").toString());
-        portEdit->setText(settings.value("db/port",     5432).toString());
-        userEdit->setText(settings.value("db/user",     "postgres").toString());
-        passEdit->setText(settings.value("db/password", "").toString());
-        rememberBox->setChecked(settings.value("db/remember", false).toBool());
-    }
-
-    // 让 main.cpp 能获取这些值
-    QString host()     const { return hostEdit->text(); }
-    int     port()     const { return portEdit->text().toInt(); }
-    QString username() const { return userEdit->text(); }
-    QString password() const { return passEdit->text(); }
-    bool    remember() const { return rememberBox->isChecked(); }
-
-private:
-    QLineEdit *hostEdit;
-    QLineEdit *portEdit;
-    QLineEdit *userEdit;
-    QLineEdit *passEdit;
-    QCheckBox *rememberBox;
-};
-
 int main(int argc, char *argv[])
 {
 
     QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
     QApplication a(argc, argv);
+    const QStringList args = QCoreApplication::arguments();
+    ThemeManager::instance().init();
+    // --theme=light|dark|system overrides the saved theme for this run only
+    for (const QString &arg : args) {
+        if (arg == QLatin1String("--theme=dark"))
+            ThemeManager::instance().setMode(ThemeManager::Mode::Dark, false);
+        else if (arg == QLatin1String("--theme=light"))
+            ThemeManager::instance().setMode(ThemeManager::Mode::Light, false);
+        else if (arg == QLatin1String("--theme=system"))
+            ThemeManager::instance().setMode(ThemeManager::Mode::System, false);
+    }
+    // --offline starts without a database (same as choosing "离线工作" in the login dialog)
+    bool offline = args.contains(QStringLiteral("--offline"));
+    DatabaseManager::instance().setOffline(offline);
 
     QOpenGLContext context;
     context.create();
@@ -116,39 +80,27 @@ int main(int argc, char *argv[])
         QGuiApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
     }
 
-    ConnectDialog dlg;
-    if (dlg.exec() != QDialog::Accepted) {
-        return 0;  // 用户取消
-    }
-
-    // 保存或清除“记住”的配置
-    {
-        QSettings settings("YourCompany", "YourApp");
-        if (dlg.remember()) {
-            settings.setValue("db/remember", true);
-            settings.setValue("db/host",     dlg.host());
-            settings.setValue("db/port",     dlg.port());
-            settings.setValue("db/user",     dlg.username());
-            settings.setValue("db/password", dlg.password());
-        } else {
-            settings.setValue("db/remember", false);
-            // 如果你想完全清空这些键，可以用 settings.remove(...)
+    if (!offline) {
+        ConnectDialog dlg;
+#ifdef WHUMAG_UI_TEST
+        if (!qEnvironmentVariable("WHUMAG_TEST_GRAB").isEmpty()) {
+            if (qEnvironmentVariableIsSet("WHUMAG_TEST_CONNECT_PROBE"))
+                QTimer::singleShot(400, &dlg, [&dlg]() { dlg.runTest(); });
+            QTimer::singleShot(3500, &dlg, [&dlg]() { uiTestGrab(&dlg, "connect_dialog"); dlg.reject(); });
+        }
+#endif
+        const int result = dlg.exec();
+        if (result == ConnectDialog::OfflineCode) {
+            offline = true;
+            DatabaseManager::instance().setOffline(true);
+        } else if (result != QDialog::Accepted) {
+            return 0;  // 用户取消
         }
     }
 
-    // 然后再初始化数据库
-    bool ok = DatabaseManager::instance().initConnection(
-        dlg.host(), dlg.port(), dlg.username(), dlg.password());
-    if (!ok) {
-        QMessageBox::critical(
-            nullptr,
-            QObject::tr("连接失败"),
-            QObject::tr("无法连接到数据库，请检查参数后重试。"));
-        return 0;
-    }
-
 #ifdef _WIN32
-    allocateConsole();
+    if (args.contains(QStringLiteral("--console")))
+        allocateConsole();   // debug console window, only when asked for
 #endif
 
         // 添加 SSL 库路径
@@ -159,6 +111,9 @@ int main(int argc, char *argv[])
         // engine.load(QUrl(QStringLiteral("qrc:/main.qml")));
     MainWindow w;
     w.show();
+#ifdef WHUMAG_UI_TEST
+    uiTestScheduleForMainWindow(&w);
+#endif
     return a.exec();
 
 }

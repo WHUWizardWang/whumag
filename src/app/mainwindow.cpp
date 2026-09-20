@@ -1,5 +1,10 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "explorerpanel.h"
+#include "welcomepage.h"
+#include "tasklistwidget.h"
+#include "thememanager.h"
+#include "uiicons.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -17,7 +22,6 @@ MainWindow::MainWindow(QWidget *parent)
     , last_opened_path_(QDir::currentPath())
 {
     ui->setupUi(this);
-    taskList = ui->taskListWidget;
     setWindowState(Qt::WindowMaximized);
     QWidget *widget_map = new MapForm();
     ui->horizontalLayout_2->addWidget(widget_map);
@@ -28,10 +32,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(build_project_form_, SIGNAL(Created(GeoMagnetismProject *)),
             this, SLOT(CreateNewProject(GeoMagnetismProject *)));
-    connect(ui->treeWidget, SIGNAL(itemExpanded(QTreeWidgetItem*)),
-            this, SLOT(On_DouClickedTreeOpen_Slots(QTreeWidgetItem*)));
-    connect(ui->treeWidget, SIGNAL(itemCollapsed(QTreeWidgetItem*)),
-            this, SLOT(On_DouClickedTreeClose_Slots(QTreeWidgetItem*)));
     connect(import_form_, &ImportForm::inputReceived,
             this, &MainWindow::adddata);
 
@@ -45,10 +45,14 @@ MainWindow::MainWindow(QWidget *parent)
             this,&MainWindow::updateTree);
     connect(merge_from_,&mergeForm::treeUpdated,
             this,&MainWindow::updateTree);
+
+    // 重设计的界面外壳：导轨、命令栏、工程面板、任务/日志、状态栏
+    setupShell();
 }
 
 MainWindow::~MainWindow()
 {
+    closing_ = true;
     // 析构各类子窗体
     delete merge_from_;
     delete build_project_form_;
@@ -69,7 +73,10 @@ void MainWindow::updateTextBrowser(const QString &text) {
 
 void MainWindow::updateTree(int flag)
 {
+    Q_UNUSED(flag)
     ProjectChanged_processed();
+    mapBuilt_ = true;
+    updatePipelineState();
 }
 
 void MainWindow::on_action_newproject_triggered()
@@ -108,42 +115,59 @@ void MainWindow::on_action_openproject_triggered()
         return;
     }
 
-    QString proj_file = fileNames[0];
-
-    UpdateLastOpenedPath(proj_file);
-
-    ProjectManager::Save(*geomag_proj_);
-    ProjectManager::Load(*geomag_proj_, proj_file);
-    ProjectChanged();
-    ProjectChanged_data();
-    ProjectChanged_processed();
+    openProjectPath(fileNames[0]);
 }
+
+namespace {
+// 工程树节点：图标名保存在 UserRole，主题切换时由 refreshTreeIcons() 重新着色
+QTreeWidgetItem *makeTreeItem(const QString &text, const QString &iconName)
+{
+    auto *item = new QTreeWidgetItem(QStringList{text});
+    item->setData(0, Qt::UserRole, iconName);
+    item->setIcon(0, UiIcons::icon(iconName, 16));
+    return item;
+}
+
+void styleCountColumn(QTreeWidgetItem *category, int count)
+{
+    category->setText(1, count > 0 ? QString::number(count) : QStringLiteral("0"));
+    category->setTextAlignment(1, Qt::AlignRight | Qt::AlignVCenter);
+    category->setForeground(1, QBrush(ThemeManager::instance().color("t3")));
+}
+} // namespace
 
 void MainWindow::ProjectChanged(){
     // Update project tree
     ui->treeWidget->clear();
-    ui->treeWidget->setColumnCount(1);
-    ui->treeWidget->addTopLevelItem(new QTreeWidgetItem(QList<QString>{geomag_proj_->Name()}));
+    ui->treeWidget->setColumnCount(2);
+    ui->treeWidget->header()->setStretchLastSection(false);
+    ui->treeWidget->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    ui->treeWidget->header()->setSectionResizeMode(1, QHeaderView::Fixed);
+    ui->treeWidget->header()->resizeSection(1, 44);
+    QTreeWidgetItem *topItem = makeTreeItem(geomag_proj_->Name(), "folder");
+    QFont bold = topItem->font(0);
+    bold.setBold(true);
+    topItem->setFont(0, bold);
+    ui->treeWidget->addTopLevelItem(topItem);
 
-    QTreeWidgetItem *topItem = ui->treeWidget->topLevelItem(0);
-    topItem->setIcon(0, QIcon(":/icons/proj_close.svg"));
-
-    // Update children
-    QTreeWidgetItem *global_item = new QTreeWidgetItem(QStringList{"全球磁场模型"});
-    global_item->setIcon(0, QIcon(":/icons/item_close_2.svg"));
-    QTreeWidgetItem *anomily_item = new QTreeWidgetItem(QStringList{"磁异常模型"});
-    anomily_item->setIcon(0, QIcon(":/icons/item_close_1.svg"));
-    QTreeWidgetItem *survey_item = new QTreeWidgetItem(QStringList{"实测数据"});
-    survey_item->setIcon(0, QIcon(":/icons/item_close_3.svg"));
-    QTreeWidgetItem *process_item = new QTreeWidgetItem(QStringList{"处理数据"});
-    process_item->setIcon(0, QIcon(":/icons/item_close_4.svg"));
+    // Update children (the order is relied upon by ProjectChanged_data / _processed: index 2 = 实测, 3 = 处理)
+    QTreeWidgetItem *global_item = makeTreeItem("全球磁场模型", "globe");
+    QTreeWidgetItem *anomily_item = makeTreeItem("磁异常模型", "anomaly");
+    QTreeWidgetItem *survey_item = makeTreeItem("实测数据", "ship");
+    QTreeWidgetItem *process_item = makeTreeItem("处理数据", "sliders");
 
     topItem->addChild(global_item);
     topItem->addChild(anomily_item);
     topItem->addChild(survey_item);
     topItem->addChild(process_item);
+    for (QTreeWidgetItem *cat : {global_item, anomily_item, survey_item, process_item})
+        styleCountColumn(cat, 0);
+    topItem->setExpanded(true);
+    survey_item->setExpanded(true);
+    process_item->setExpanded(true);
 
     UpdateHistoricalProject();
+    refreshShell();
 }
 
 void MainWindow::ProjectChanged_data()
@@ -165,11 +189,11 @@ void MainWindow::ProjectChanged_data()
     }
     for(QString str:geomag_proj_->nameList_real)
     {
-        QTreeWidgetItem *data_item = new QTreeWidgetItem(QStringList{str});
-        data_item->setIcon(0, QIcon(":/icons/real_file.svg"));
-        topItem->child(2)->addChild(data_item);
+        topItem->child(2)->addChild(makeTreeItem(str, "file"));
     }
+    styleCountColumn(topItem->child(2), geomag_proj_->nameList_real.size());
     data_num = geomag_proj_->nameList_real.size();
+    updatePipelineState();
 }
 
 void MainWindow::ProjectChanged_processed()
@@ -209,10 +233,10 @@ void MainWindow::ProjectChanged_processed()
     }
     for(QString str:geomag_proj_->nameList_processed)
     {
-        QTreeWidgetItem *data_item = new QTreeWidgetItem(QStringList{str});
-        data_item->setIcon(0, QIcon(":/icons/process_file.svg"));
-        topItem->child(3)->addChild(data_item);
+        topItem->child(3)->addChild(makeTreeItem(str, "file"));
     }
+    styleCountColumn(topItem->child(3), geomag_proj_->nameList_processed.size());
+    updatePipelineState();
 }
 
 void MainWindow::UpdateLastOpenedPath(const QString &path)
@@ -250,12 +274,22 @@ void MainWindow::LoadHistoricalProjInfo(){
 
 void MainWindow::action_history_slot(){
     QAction *action = (QAction*)sender();
+    openProjectPath(action->text());
+}
 
-    QString proj_file = action->text();
+void MainWindow::openProjectPath(const QString &proj_file){
     UpdateLastOpenedPath(proj_file);
 
     ProjectManager::Save(*geomag_proj_);
-    ProjectManager::Load(*geomag_proj_, proj_file);
+    if (!ProjectManager::Load(*geomag_proj_, proj_file)) {
+        QMessageBox::warning(this, tr("打开工程"),
+                             tr("无法读取工程：\n%1\n\n请确认工程文件完整，且同一目录下有 Measured 和 Processed 文件夹。")
+                                 .arg(QDir::toNativeSeparators(proj_file)));
+        // Load() clears the file lists first; put the open project's lists back
+        if (!geomag_proj_->Name().isEmpty())
+            ProjectManager::Load(*geomag_proj_, geomag_proj_->Path() + "/" + geomag_proj_->Name() + ".proj");
+        return;
+    }
     ProjectChanged();
     ProjectChanged_data();
     ProjectChanged_processed();
@@ -288,34 +322,6 @@ void MainWindow::SaveHistoricalProjInfo(){
     historical_file.close();
 }
 
-void MainWindow::On_DouClickedTreeOpen_Slots(QTreeWidgetItem *item){
-    if(item->text(0) == geomag_proj_->Name()){
-        item->setIcon(0, QIcon(":/icons/proj_open.svg"));
-    } else if(item->text(0) == "全球磁场模型"){
-        item->setIcon(0, QIcon(":/icons/item_open_2.svg"));
-    } else if(item->text(0) == "磁异常模型") {
-        item->setIcon(0, QIcon(":/icons/item_open_1.svg"));
-    } else if(item->text(0) == "实测数据") {
-        item->setIcon(0, QIcon(":/icons/item_open_3.svg"));
-    } else if(item->text(0) == "处理数据") {
-        item->setIcon(0, QIcon(":/icons/item_open_4.svg"));
-    }
-}
-
-void MainWindow::On_DouClickedTreeClose_Slots(QTreeWidgetItem *item){
-    if(item->text(0) == geomag_proj_->Name()){
-        item->setIcon(0, QIcon(":/icons/proj_close.svg"));
-    } else if(item->text(0) == "全球磁场模型"){
-        item->setIcon(0, QIcon(":/icons/item_close_2.svg"));
-    } else if(item->text(0) == "磁异常模型") {
-        item->setIcon(0, QIcon(":/icons/item_close_1.svg"));
-    } else if(item->text(0) == "实测数据") {
-        item->setIcon(0, QIcon(":/icons/item_close_3.svg"));
-    } else if(item->text(0) == "处理数据") {
-        item->setIcon(0, QIcon(":/icons/item_close_4.svg"));
-    }
-}
-
 void MainWindow::on_action_import_triggered()
 {
     import_form_->projectPath = geomag_proj_->Path();
@@ -329,6 +335,11 @@ void MainWindow::on_action_query_triggered()
 
 void MainWindow::on_action_anoquery_triggered()
 {
+    if (DatabaseManager::instance().isOffline())
+    {
+        QMessageBox::information(this, tr("离线工作"), tr("当前为离线工作模式，全球磁异常查询需要数据库。\n重新启动程序并连接数据库后即可使用。"));
+        return;
+    }
     query_form_ano_->show();
 }
 
@@ -1580,6 +1591,8 @@ void MainWindow::on_actionjianhexian_triggered()
     QTextBrowserRedirector redirector(ui->textBrowser);
     Accuracy myAccuracy;
     myAccuracy.processData(backgroundPath,checkPath);
+    evaluated_ = true;
+    updatePipelineState();
 }
 
 void MainWindow::on_actionjianhexian2_triggered()
@@ -1666,6 +1679,11 @@ void MainWindow::on_action_about_triggered()
 
 void MainWindow::on_action_database_triggered()
 {
+    if (DatabaseManager::instance().isOffline())
+    {
+        QMessageBox::information(this, tr("离线工作"), tr("当前为离线工作模式，数据库管理需要数据库。\n重新启动程序并连接数据库后即可使用。"));
+        return;
+    }
     database_form->proPath = geomag_proj_->Path();
     database_form->setWindowState(Qt::WindowMaximized);
 //    auto start = std::chrono::high_resolution_clock::now(); // 获取当前时间点

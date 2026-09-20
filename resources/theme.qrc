@@ -1,0 +1,14 @@
+<RCC>
+    <qresource prefix="/theme">
+        <file alias="app.qss">theme/app.qss</file>
+        <file alias="check-white.png">theme/check-white.png</file>
+        <file alias="chev-down-light.png">theme/chev-down-light.png</file>
+        <file alias="chev-up-light.png">theme/chev-up-light.png</file>
+        <file alias="chev-left-light.png">theme/chev-left-light.png</file>
+        <file alias="chev-right-light.png">theme/chev-right-light.png</file>
+        <file alias="chev-down-dark.png">theme/chev-down-dark.png</file>
+        <file alias="chev-up-dark.png">theme/chev-up-dark.png</file>
+        <file alias="chev-left-dark.png">theme/chev-left-dark.png</file>
+        <file alias="chev-right-dark.png">theme/chev-right-dark.png</file>
+    </qresource>
+</RCC>
