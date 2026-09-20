@@ -9,6 +9,29 @@ QueryFromGridSetForm::QueryFromGridSetForm(QWidget *parent) :
     ui->setupUi(this);
     ui->comboBox->addItems(QStringList{"E", "M"});
 
+    // the parameter column is narrow: give "from" / "to" equal room and keep the dates readable
+    for (QWidget *w : {static_cast<QWidget *>(ui->lineEdit_lat_min), static_cast<QWidget *>(ui->lineEdit_lat_max),
+                       static_cast<QWidget *>(ui->lineEdit_lon_min), static_cast<QWidget *>(ui->lineEdit_lon_max),
+                       static_cast<QWidget *>(ui->lineEdit_height_max), static_cast<QWidget *>(ui->dateTimeEdit_min),
+                       static_cast<QWidget *>(ui->dateTimeEdit_max)})
+        w->setMinimumWidth(108);
+    for (QWidget *w : {static_cast<QWidget *>(ui->lineEdit_lat_step), static_cast<QWidget *>(ui->lineEdit_lon_step),
+                       static_cast<QWidget *>(ui->lineEdit_height_step), static_cast<QWidget *>(ui->lineEdit_date_step)})
+        w->setMinimumWidth(42);
+    // the spin buttons reserve 20 px of padding, which cut off the last digit of the date
+    for (QDateTimeEdit *e : {ui->dateTimeEdit_min, ui->dateTimeEdit_max})
+    {
+        e->setButtonSymbols(QAbstractSpinBox::NoButtons);
+        e->setStyleSheet(QStringLiteral("QDateTimeEdit { padding-right: 8px; }"));
+    }
+    for (int c : {2, 3, 5, 6})
+        ui->gridLayout->setColumnStretch(c, 1);
+    ui->gridLayout->setColumnStretch(8, 0);
+
+    // let the query dialog show how many points the current ranges add up to
+    for (QLineEdit *edit : findChildren<QLineEdit *>())
+        connect(edit, &QLineEdit::textChanged, this, &QueryFromGridSetForm::changed);
+
     //    OmgValidator::setValidatorLat(ui->lineEdit_lat_min);
     //    OmgValidator::setValidatorLat(ui->lineEdit_lat_max);
     //    OmgValidator::setValidatorStep(ui->lineEdit_lat_step);

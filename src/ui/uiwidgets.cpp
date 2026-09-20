@@ -3,8 +3,10 @@
 #include "thememanager.h"
 #include "uiicons.h"
 
+#include <QButtonGroup>
 #include <QHBoxLayout>
 #include <QPainter>
+#include <QPushButton>
 #include <QVBoxLayout>
 #include <QVariant>
 
@@ -161,4 +163,87 @@ void LogoMark::paintEvent(QPaintEvent *)
     p.drawEllipse(QPointF(0, 0), 9.4 * s, 5.6 * s);
     p.drawEllipse(QPointF(0, 0), 5.6 * s, 3.2 * s);
     p.drawEllipse(QPointF(0, 0), 2.1 * s, 1.1 * s);
+}
+
+// ---------------------------------------------------------------- SegmentedControl
+SegmentedControl::SegmentedControl(const QStringList &labels, QWidget *parent) : QFrame(parent)
+{
+    setObjectName("segmented");
+    group_ = new QButtonGroup(this);
+    group_->setExclusive(true);
+    auto *lay = new QHBoxLayout(this);
+    lay->setContentsMargins(2, 2, 2, 2);
+    lay->setSpacing(2);
+    for (int i = 0; i < labels.size(); ++i) {
+        auto *b = new QPushButton(labels[i]);
+        b->setCheckable(true);
+        b->setCursor(Qt::PointingHandCursor);
+        b->setFocusPolicy(Qt::TabFocus);
+        b->setProperty("seg", true);
+        group_->addButton(b, i);
+        lay->addWidget(b, 1);
+    }
+    if (group_->button(0))
+        group_->button(0)->setChecked(true);
+    connect(group_, QOverload<int>::of(&QButtonGroup::buttonClicked), this, &SegmentedControl::currentChanged);
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, &SegmentedControl::restyle);
+    restyle();
+}
+
+int SegmentedControl::currentIndex() const
+{
+    return group_->checkedId();
+}
+
+void SegmentedControl::setCurrentIndex(int index)
+{
+    if (QAbstractButton *b = group_->button(index)) {
+        b->setChecked(true);
+        emit currentChanged(index);
+    }
+}
+
+void SegmentedControl::setSegmentEnabled(int index, bool enabled)
+{
+    if (QAbstractButton *b = group_->button(index))
+        b->setEnabled(enabled);
+}
+
+void SegmentedControl::restyle()
+{
+    const ThemeManager &tm = ThemeManager::instance();
+    setStyleSheet(QStringLiteral(
+        "#segmented { background: %1; border: 1px solid %2; border-radius: 7px; }"
+        "#segmented QPushButton { background: transparent; border: none; border-radius: 5px; color: %3; padding: 4px 12px; min-height: 22px; }"
+        "#segmented QPushButton:hover { color: %4; }"
+        "#segmented QPushButton:checked { background: %5; color: %4; font-weight: 600; border: 1px solid %2; }"
+        "#segmented QPushButton:disabled { color: %6; }")
+                      .arg(tm.hex("n3"), tm.hex("line"), tm.hex("t2"), tm.hex("t1"), tm.hex("n2"), tm.hex("t3")));
+}
+
+// ---------------------------------------------------------------- StatCard
+StatCard::StatCard(const QString &caption, QWidget *parent) : QFrame(parent)
+{
+    setProperty("role", QStringLiteral("card"));
+    auto *lay = new QVBoxLayout(this);
+    lay->setContentsMargins(12, 7, 12, 8);
+    lay->setSpacing(0);
+    caption_ = new QLabel(caption);
+    caption_->setProperty("role", QStringLiteral("hint"));
+    caption_->setStyleSheet("font-size: 11px;");
+    value_ = new QLabel(QStringLiteral("—"));
+    value_->setProperty("role", QStringLiteral("mono"));
+    value_->setStyleSheet("font-size: 15px; font-weight: 500;");
+    lay->addWidget(caption_);
+    lay->addWidget(value_);
+}
+
+void StatCard::setCaption(const QString &caption)
+{
+    caption_->setText(caption);
+}
+
+void StatCard::setValue(const QString &value)
+{
+    value_->setText(value);
 }

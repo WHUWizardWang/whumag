@@ -1,5 +1,6 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "dataquerydialog.h"
 #include "explorerpanel.h"
 #include "welcomepage.h"
 #include "tasklistwidget.h"
@@ -23,6 +24,8 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     setWindowState(Qt::WindowMaximized);
+    // 两个查询窗体放进同一个"数据查询"窗口；窗口拥有它们
+    queryDialog_ = new DataQueryDialog(query_form_, query_form_ano_, this);
     QWidget *widget_map = new MapForm();
     ui->horizontalLayout_2->addWidget(widget_map);
 
@@ -57,8 +60,7 @@ MainWindow::~MainWindow()
     delete merge_from_;
     delete build_project_form_;
     delete import_form_;
-    delete query_form_;
-    delete query_form_ano_;
+    delete queryDialog_;   // 同时释放它承载的两个查询窗体
     delete geomag_proj_;
     delete database_form;
     delete navPara_form_;
@@ -330,7 +332,7 @@ void MainWindow::on_action_import_triggered()
 
 void MainWindow::on_action_query_triggered()
 {
-    query_form_->show();
+    queryDialog_->showPage(DataQueryDialog::GlobalModel);
 }
 
 void MainWindow::on_action_anoquery_triggered()
@@ -340,7 +342,7 @@ void MainWindow::on_action_anoquery_triggered()
         QMessageBox::information(this, tr("离线工作"), tr("当前为离线工作模式，全球磁异常查询需要数据库。\n重新启动程序并连接数据库后即可使用。"));
         return;
     }
-    query_form_ano_->show();
+    queryDialog_->showPage(DataQueryDialog::Anomaly);
 }
 
 int MainWindow::findIndexByString(const QString &targetString)

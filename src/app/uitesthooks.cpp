@@ -3,9 +3,13 @@
 #ifdef WHUMAG_UI_TEST
 
 #include <QApplication>
+#include <QRadioButton>
 #include <QTreeWidget>
+#include "MagAno/anoqueryform.h"
+#include "dataquerydialog.h"
 #include "logtextbrowser.h"
 #include "tasklistwidget.h"
+#include "wmm/queryform.h"
 #include <QDir>
 #include <QMetaObject>
 #include <QPixmap>
@@ -65,6 +69,30 @@ void uiTestScheduleForMainWindow(QWidget *mainWindow)
                 log->append(QStringLiteral("错误: 输入数据为空（line99.txt）"));
                 log->append(QStringLiteral("建模完成，RMS = 1.82 nT"));
             }
+        });
+    }
+    // WHUMAG_TEST_QUERY=0|1 opens the data query dialog on the model / anomaly page.
+    //   WHUMAG_TEST_QUERY_MODE=<radio object name> picks the query mode (e.g. radioButton_grid),
+    //   WHUMAG_TEST_QUERY_RUN=1 presses "查询", WHUMAG_TEST_QUERY_DEMO=1 fills the anomaly page with a synthetic result
+    const QString queryPage = qEnvironmentVariable("WHUMAG_TEST_QUERY");
+    if (!queryPage.isEmpty()) {
+        QTimer::singleShot(900, mainWindow, [mainWindow, queryPage]() {
+            auto *dlg = mainWindow->findChild<DataQueryDialog *>();
+            if (!dlg)
+                return;
+            const bool anomaly = queryPage.toInt() == 1;
+            dlg->showPage(anomaly ? DataQueryDialog::Anomaly : DataQueryDialog::GlobalModel);
+            QWidget *form = anomaly ? static_cast<QWidget *>(dlg->findChild<AnoQueryForm *>()) : static_cast<QWidget *>(dlg->findChild<QueryForm *>());
+            if (!form)
+                return;
+            const QString mode = qEnvironmentVariable("WHUMAG_TEST_QUERY_MODE");
+            if (!mode.isEmpty())
+                if (auto *radio = form->findChild<QRadioButton *>(mode))
+                    radio->setChecked(true);
+            if (qEnvironmentVariableIsSet("WHUMAG_TEST_QUERY_RUN"))
+                QMetaObject::invokeMethod(form, "on_pushButton_3_clicked", Qt::DirectConnection);
+            if (anomaly && qEnvironmentVariableIsSet("WHUMAG_TEST_QUERY_DEMO"))
+                QMetaObject::invokeMethod(form, "testFillSynthetic", Qt::DirectConnection);
         });
     }
     // WHUMAG_TEST_SHOW=ClassA,ClassB shows every top-level widget of those classes (forms owned by the main window)

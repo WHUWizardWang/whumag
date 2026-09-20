@@ -3,7 +3,11 @@
 
 #include <QFrame>
 #include <QLabel>
+#include <QStringList>
 #include <QWidget>
+
+class QButtonGroup;
+class QPushButton;
 
 // Small reusable, theme-aware widgets shared by the redesigned windows.
 
@@ -79,6 +83,38 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *) override;
+};
+
+// Row of mutually exclusive buttons drawn as one rounded control (replaces radio-button rows).
+class SegmentedControl : public QFrame
+{
+    Q_OBJECT
+public:
+    explicit SegmentedControl(const QStringList &labels, QWidget *parent = nullptr);
+    int currentIndex() const;
+    void setCurrentIndex(int index);
+    void setSegmentEnabled(int index, bool enabled);
+
+signals:
+    void currentChanged(int index);
+
+private:
+    void restyle();
+    QButtonGroup *group_;
+};
+
+// Small caption + value tile ("最小值  −46.5 nT").
+class StatCard : public QFrame
+{
+    Q_OBJECT
+public:
+    explicit StatCard(const QString &caption, QWidget *parent = nullptr);
+    void setValue(const QString &value);
+    void setCaption(const QString &caption);
+
+private:
+    QLabel *caption_;
+    QLabel *value_;
 };
 
 #endif // UIWIDGETS_H

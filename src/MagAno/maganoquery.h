@@ -47,8 +47,11 @@ private:
     static int omg_query_impl(QVector<AnoPoint> &ano_pnts,
                                const QString &tableName,
                                const std::function<int(double x, double y)> &indexCalc,
-                               const std::function<void(AnoPoint&, QSqlQuery&)> &assign)
+                               const std::function<void(AnoPoint&, QSqlQuery&)> &assign,
+                               QVector<char> *matched)
     {
+        if (matched)
+            matched->fill(0, ano_pnts.size());
         if (!DatabaseManager::instance().initConnection())
         {
             qWarning() << "MagAnoQuery: database connection failed, aborting query against" << tableName;
@@ -100,7 +103,11 @@ private:
                 int idxColumn = query.record().count() - 1;
                 int returnedIdx = query.value(idxColumn).toInt();
                 for (int pointIndex : idxToPoints.value(returnedIdx))
+                {
                     assign(ano_pnts[pointIndex], query);
+                    if (matched)
+                        (*matched)[pointIndex] = 1;   // this point really had a row in the table
+                }
             }
         }
         if (inTransaction)
@@ -110,7 +117,8 @@ private:
     }
 
 public:
-    static int omg_emag2(QVector<AnoPoint> &ano_pnts)
+    // |matched| (optional) receives 1 for every point that had a matching row and 0 for the rest
+    static int omg_emag2(QVector<AnoPoint> &ano_pnts, QVector<char> *matched = nullptr)
     {
         double lon_step = 360.0/10800.0;
         double lat_step = 180.0/5400.0;
@@ -128,10 +136,10 @@ public:
                 p.y = query.value(2).toDouble();
                 p.x = query.value(3).toDouble();
                 p.z = query.value(4).toDouble();
-            });
+            }, matched);
     }
 
-    static int omg_mamea(QVector<AnoPoint> &ano_pnts)
+    static int omg_mamea(QVector<AnoPoint> &ano_pnts, QVector<char> *matched = nullptr)
     {
         double lon_step = (160.0-93.0)/2011.0;
         double lat_step = (46.0+12.0)/1741.0;
@@ -146,7 +154,7 @@ public:
                 p.y = query.value(0).toDouble();
                 p.x = query.value(1).toDouble();
                 p.z = query.value(2).toDouble();
-            });
+            }, matched);
     }
 };
 

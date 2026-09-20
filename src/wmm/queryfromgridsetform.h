@@ -21,6 +21,9 @@ public:
     // Used after getQueryNum().
     int toCoordGeodeticArray(MAGtype_CoordGeodetic *CoordGeodeticArr, MAGtype_Date *UserDateArr, int length);
 
+signals:
+    void changed();   // any of the range / step / date edits changed
+
 private:
     int getIntervalNum(double beg, double end, double interval);
 

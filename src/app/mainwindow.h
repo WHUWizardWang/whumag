@@ -50,6 +50,7 @@ namespace Ui
 }
 QT_END_NAMESPACE
 
+class DataQueryDialog;
 class ExplorerPanel;
 class Ribbon;
 class WelcomePage;
@@ -162,6 +163,7 @@ private:
     ImportForm          *import_form_;                      // （向当前工程）导入数据窗口
     QueryForm           *query_form_;                       // 全球磁场模型查询窗口
     AnoQueryForm        *query_form_ano_;                   // 磁异常查询窗口
+    DataQueryDialog     *queryDialog_ = nullptr;            // 数据查询窗口（承载上面两个查询窗体并拥有它们）
     mergeForm           *merge_from_;                       // 数据融合窗口
     database            *database_form;                     // 数据库窗口
     InputPathForm       *navPara_form_;                     // 匹配导航路径选择

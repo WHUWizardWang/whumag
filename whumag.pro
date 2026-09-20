@@ -33,6 +33,8 @@ SOURCES += \
     src/ui/welcomepage.cpp \
     src/ui/tasklistwidget.cpp \
     src/ui/logtextbrowser.cpp \
+    src/ui/queryformshell.cpp \
+    src/ui/dataquerydialog.cpp \
     src/app/mainwindow_shell.cpp \
     src/app/uitesthooks.cpp \
     src/3DView/glwidget.cpp \
@@ -125,6 +127,8 @@ HEADERS += \
     src/ui/welcomepage.h \
     src/ui/tasklistwidget.h \
     src/ui/logtextbrowser.h \
+    src/ui/queryformshell.h \
+    src/ui/dataquerydialog.h \
     src/app/uitesthooks.h \
     src/3DView/glwidget.h \
     src/3DView/omgglctrl.h \

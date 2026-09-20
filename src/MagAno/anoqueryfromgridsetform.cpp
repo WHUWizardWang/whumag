@@ -13,6 +13,9 @@ AnoQueryFromGridSetForm::AnoQueryFromGridSetForm(QWidget *parent) :
     ui->lineEdit_lon_step->setVisible(false);
     //    ui->comboBox->addItems(QStringList{"E", "M"});
 
+    for (QLineEdit *edit : {ui->lineEdit_lat_min, ui->lineEdit_lat_max, ui->lineEdit_lon_min, ui->lineEdit_lon_max})
+        connect(edit, &QLineEdit::textChanged, this, &AnoQueryFromGridSetForm::changed);
+
     OmgValidator::setValidatorLat(ui->lineEdit_lat_min);
     OmgValidator::setValidatorLat(ui->lineEdit_lat_max);
     //    OmgValidator::setValidatorStep(ui->lineEdit_lat_step);
