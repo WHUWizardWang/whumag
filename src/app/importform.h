@@ -36,6 +36,7 @@ public slots:
 
 private:
     Ui::ImportForm *ui;
+    void buildLayout();
     bool appendTextToFile(const QString &textToAdd);
     void openData(QString filePath,double &xmin,double &xmax,double &ymin,double &ymax);
 

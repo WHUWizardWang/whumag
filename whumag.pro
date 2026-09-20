@@ -35,6 +35,8 @@ SOURCES += \
     src/ui/logtextbrowser.cpp \
     src/ui/queryformshell.cpp \
     src/ui/dataquerydialog.cpp \
+    src/ui/formkit.cpp \
+    src/ui/resultpreviewpanel.cpp \
     src/app/mainwindow_shell.cpp \
     src/app/uitesthooks.cpp \
     src/3DView/glwidget.cpp \
@@ -129,6 +131,8 @@ HEADERS += \
     src/ui/logtextbrowser.h \
     src/ui/queryformshell.h \
     src/ui/dataquerydialog.h \
+    src/ui/formkit.h \
+    src/ui/resultpreviewpanel.h \
     src/app/uitesthooks.h \
     src/3DView/glwidget.h \
     src/3DView/omgglctrl.h \

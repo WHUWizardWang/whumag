@@ -5,10 +5,11 @@
 QMainWindow, QDialog { background: @n1@; }
 QToolTip { background: @tipBg@; color: @tipFg@; border: none; padding: 4px 8px; }
 QLabel { background: transparent; }
-QLabel[role="h1"] { font-size: 22px; font-weight: 700; }
-QLabel[role="h2"] { font-size: 14px; font-weight: 700; }
+QLabel[role="h1"] { font-size: 16.5pt; font-weight: 700; }
+QLabel[role="h2"] { font-size: 10.5pt; font-weight: 700; }
 QLabel[role="section"] { font-weight: 700; }
-QLabel[role="hint"] { color: @t3@; font-size: 12px; }
+QLabel[role="field"] { color: @t2@; font-size: 9pt; }
+QLabel[role="hint"] { color: @t3@; font-size: 9pt; }
 QLabel[role="mono"] { font-family: "Cascadia Mono", Consolas, "Courier New", monospace; }
 QFrame[frameShape="4"], QFrame[frameShape="5"] { background: @line@; border: none; color: @line@; }
 QFrame[frameShape="4"] { max-height: 1px; }
@@ -16,7 +17,7 @@ QFrame[frameShape="5"] { max-width: 1px; }
 QFrame[role="card"] { background: @n2@; border: 1px solid @line@; border-radius: 8px; }
 QFrame[role="panel"] { background: @n1@; border: none; }
 QFrame[role="card"][hover="true"] { border-color: @accLine@; }
-QLabel[role="panelTitle"] { font-weight: 700; font-size: 12px; }
+QLabel[role="panelTitle"] { font-weight: 700; font-size: 9pt; }
 
 /* ---------------------------------------------------------------- buttons */
 QPushButton {
@@ -40,7 +41,7 @@ QPushButton[role="link"]:hover { text-decoration: underline; }
 
 QPushButton[role="chip"] {
     background: @n4@; color: @t2@; border: 1px solid @line@; border-radius: 10px; padding: 0 9px; min-height: 18px;
-    max-height: 20px; font-size: 11px;
+    max-height: 20px; font-size: 8.25pt;
 }
 QPushButton[role="chip"]:hover { background: @n3@; }
 QPushButton[role="chip"]:checked { background: @accSoft@; color: @accInk@; border-color: @accLine@; }

@@ -95,7 +95,7 @@ void AnoQueryForm::fill_item_model(QVector<AnoPoint> &ano_pnts, const QVector<ch
     QFont mono;
     mono.setFamilies({QStringLiteral("Cascadia Mono"), QStringLiteral("Consolas"), QStringLiteral("Courier New")});
     mono.setStyleHint(QFont::Monospace);
-    mono.setPixelSize(12);
+    mono.setPointSizeF(9);
     const QColor muted = ThemeManager::instance().color("t3");
 
     table_model_->setRowCount(ano_pnts.size());
@@ -188,7 +188,7 @@ void AnoQueryForm::buildResultViews(QVBoxLayout *middle, QVBoxLayout *leftLayout
     chTitle->setProperty("role", QStringLiteral("section"));
     chartInfo_ = new QLabel;
     chartInfo_->setProperty("role", QStringLiteral("mono"));
-    chartInfo_->setStyleSheet("font-size: 11px;");
+    chartInfo_->setStyleSheet("font-size: 8.25pt;");
     auto *detail = new QPushButton(tr("在新窗口查看"));
     detail->setProperty("role", QStringLiteral("link"));
     detail->setCursor(Qt::PointingHandCursor);
@@ -239,7 +239,7 @@ void AnoQueryForm::applyPlotTheme()
     plot_->setBackground(QBrush(bg));
     plot_->axisRect()->setBackground(QBrush(bg));
     QFont f = plot_->font();
-    f.setPixelSize(11);
+    f.setPointSizeF(8.25);
     for (QCPAxis *a : {plot_->xAxis, plot_->yAxis, scale_->axis()})
     {
         a->setBasePen(QPen(axis));
@@ -554,5 +554,7 @@ void AnoQueryForm::testFillSynthetic()
     }
     fill_item_model(lastPoints_, lastMatched_);
     showResults(0, 231, true);
+    if (qEnvironmentVariableIsSet("WHUMAG_TEST_QUERY_DETAIL"))
+        openDetailWindow();
 }
 #endif

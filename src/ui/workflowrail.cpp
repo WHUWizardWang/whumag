@@ -56,7 +56,7 @@ void RailButton::paintEvent(QPaintEvent *)
                  UiIcons::pixmap(icon_, iconSize, fg, 1.6, devicePixelRatioF()));
 
     QFont f = font();
-    f.setPixelSize(number_ > 0 ? 12 : 11);
+    f.setPointSizeF(number_ > 0 ? 9 : 8.25);
     f.setBold(on);
     p.setFont(f);
     p.setPen(number_ > 0 ? fg : tm.color("t3"));
@@ -64,7 +64,7 @@ void RailButton::paintEvent(QPaintEvent *)
 
     if (number_ > 0) {
         QFont nf(QStringLiteral("Cascadia Mono"));
-        nf.setPixelSize(9);
+        nf.setPointSizeF(6.75);
         p.setFont(nf);
         p.setPen(on ? tm.color("accInk") : tm.color("t3"));
         p.drawText(QRect(7, 4, 14, 12), Qt::AlignLeft | Qt::AlignVCenter, QString::number(number_));

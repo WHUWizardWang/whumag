@@ -121,10 +121,10 @@ WelcomePage::WelcomePage(QWidget *parent) : QWidget(parent)
     brand->addStretch(1);
 
     auto *title = new QLabel(tr("地磁基准图"));
-    title->setStyleSheet("font-size: 30px; font-weight: 700;");
+    title->setStyleSheet("font-size: 22.5pt; font-weight: 700;");
     auto *subtitle = new QLabel(tr("基于稀疏磁测数据的地磁基准图高效构建系统"));
     subtitle->setProperty("role", QStringLiteral("hint"));
-    subtitle->setStyleSheet("font-size: 13px;");
+    subtitle->setStyleSheet("font-size: 9.75pt;");
 
     auto *newBtn = new QPushButton(tr("新建工程"));
     newBtn->setProperty("role", QStringLiteral("primary"));
@@ -265,7 +265,7 @@ void WelcomePage::setRecentProjects(const QStringList &projectFiles)
         name->setProperty("role", QStringLiteral("section"));
         auto *path = new ElideLabel(QDir::toNativeSeparators(fi.absolutePath()));
         path->setProperty("role", QStringLiteral("mono"));
-        path->setStyleSheet("font-size: 11px; color: " + ThemeManager::instance().hex("t3") + ";");
+        path->setStyleSheet("font-size: 8.25pt; color: " + ThemeManager::instance().hex("t3") + ";");
         text->addWidget(name);
         text->addWidget(path);
         lay->addLayout(text, 1);

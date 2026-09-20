@@ -1,20 +1,97 @@
 #include "importform.h"
 #include "ui_importform.h"
 
+#include "formkit.h"
+#include "uiscale.h"
+
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+#include <QVBoxLayout>
+
 ImportForm::ImportForm(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::ImportForm)
 {
     ui->setupUi(this);
-    ui->radioButton->setVisible(false);
-    ui->shuxing->setVisible(true);
-    ui->shujuku->setVisible(false);
-    ui->widget_dxdy->setVisible(false);
     ui->comboBox_datatype->addItem("实测数据");
     ui->comboBox_datatype->addItem("处理后数据");
     ui->comboBox_platform->addItem("船磁");
     ui->comboBox_platform->addItem("航磁");
     ui->comboBox_platform->addItem("水下磁测");
+    buildLayout();
+}
+
+// Replaces the .ui layout with a cleaner one.  The widgets the code below still reads (the two
+// mode radios, the "加入数据库" check box and the dx / dy spin boxes) stay alive but hidden.
+void ImportForm::buildLayout()
+{
+    for (QWidget *w : {static_cast<QWidget *>(ui->radioButton), static_cast<QWidget *>(ui->radioButton_2),
+                       static_cast<QWidget *>(ui->shujuku), static_cast<QWidget *>(ui->widget_dxdy)})
+    {
+        w->setParent(this);
+        w->hide();
+    }
+
+    setWindowTitle(tr("导入数据"));
+    resize(UiScale::windowSize(600, 440));
+    setMinimumWidth(UiScale::dp(520));
+
+    auto *root = new QVBoxLayout;
+    root->setContentsMargins(26, 22, 26, 18);
+    root->setSpacing(16);
+    root->addWidget(FormKit::header(QStringLiteral("import"), tr("导入数据"), tr("把测线数据文件加入当前工程")));
+
+    // file
+    ui->lineEdit_path->setPlaceholderText(tr("选择 .txt 或 .dat 数据文件"));
+    ui->pushButton_choose->setText(tr("选择文件…"));
+    auto *pathRow = new QHBoxLayout;
+    pathRow->setSpacing(8);
+    pathRow->addWidget(ui->lineEdit_path, 1);
+    pathRow->addWidget(ui->pushButton_choose);
+    root->addLayout(FormKit::field(tr("数据文件"), pathRow, tr("每行一个点：经度 纬度 磁场值，以空格分隔。")));
+
+    // data type / platform side by side
+    auto *pair = new QHBoxLayout;
+    pair->setSpacing(14);
+    pair->addLayout(FormKit::field(tr("数据类型"), ui->comboBox_datatype), 1);
+    pair->addLayout(FormKit::field(tr("测量平台"), ui->comboBox_platform), 1);
+    root->addLayout(pair);
+
+    // name in the project
+    auto *prefix = new QLabel(QStringLiteral("real_"));
+    FormKit::setRole(prefix, "mono");
+    ui->lineEdit_tablename->setPlaceholderText(tr("例如 line01"));
+    auto *nameRow = new QHBoxLayout;
+    nameRow->setSpacing(6);
+    nameRow->addWidget(prefix);
+    nameRow->addWidget(ui->lineEdit_tablename, 1);
+    root->addLayout(FormKit::field(tr("数据名称"), nameRow, tr("在工程中显示的名称，文件后缀会自动加上。")));
+
+    ui->lineEdit_3->setPlaceholderText(tr("可选"));
+    root->addLayout(FormKit::field(tr("备注"), ui->lineEdit_3));
+    root->addStretch(1);
+
+    // footer
+    auto *cancel = new QPushButton(tr("取消"));
+    connect(cancel, &QPushButton::clicked, this, &QWidget::close);
+    ui->pushButton_confirm->setText(tr("导入"));
+    ui->pushButton_confirm->setDefault(true);
+    FormKit::setRole(ui->pushButton_confirm, "primary");
+    ui->pushButton_confirm->setMinimumWidth(96);
+    auto *footer = new QHBoxLayout;
+    footer->setSpacing(8);
+    footer->addStretch(1);
+    footer->addWidget(cancel);
+    footer->addWidget(ui->pushButton_confirm);
+    root->addLayout(footer);
+
+    // swap: the old layout first, then adopt the new one (which re-parents every widget used above),
+    // and only then remove the now empty group boxes
+    delete layout();
+    setLayout(root);
+    delete ui->groupBox;
+    delete ui->groupBox_2;
 }
 
 ImportForm::~ImportForm()
@@ -84,24 +161,27 @@ void ImportForm::on_pushButton_choose_clicked()
     if (!filePath.isEmpty())
     {
         ui->lineEdit_path->setText(filePath);
+        if (ui->lineEdit_tablename->text().trimmed().isEmpty())
+            ui->lineEdit_tablename->setText(QFileInfo(filePath).completeBaseName());   // sensible default name
     }
 }
 
 
 void ImportForm::on_pushButton_confirm_clicked()
 {
-    QString TableName = ui->lineEdit_tablename->text();
-    TableName = "real_"+TableName;
-
+    QString TableName = ui->lineEdit_tablename->text().trimmed();
     if (TableName.isEmpty())
     {
         QMessageBox::warning(this,"警告","请为导入数据命名");
         return;
     }
+    TableName = "real_"+TableName;
+
     QString filePath = ui->lineEdit_path->text();
-    if(filePath.isEmpty())
+    if(filePath.isEmpty() || !QFileInfo::exists(filePath))
     {
-        QMessageBox::warning(this,"警告","请选择一个文件");
+        QMessageBox::warning(this,"警告","请选择一个存在的数据文件");
+        return;
     }
     QFileInfo fileinfo = QFileInfo(filePath);
     // 文件后缀
@@ -136,6 +216,8 @@ void ImportForm::on_pushButton_confirm_clicked()
     // 加入数据库
     if (!ui->checkBox->isChecked())
     {
+        ui->lineEdit_path->clear();          // the next import starts from an empty form
+        ui->lineEdit_tablename->clear();
         close();
         return;
     }

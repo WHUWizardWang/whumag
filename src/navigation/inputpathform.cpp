@@ -1,5 +1,16 @@
 #include "inputpathform.h"
 #include "ui_inputpathform.h"
+
+#include "formkit.h"
+#include "resultpreviewpanel.h"
+#include "thememanager.h"
+#include "uiscale.h"
+#include "uiwidgets.h"
+
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QScrollArea>
+#include <QVBoxLayout>
 #include <QFileDialog>
 #include <QMessageBox>
 #include "navigation/iccp.h"
@@ -19,6 +30,123 @@ InputPathForm::InputPathForm(QWidget *parent) :
     ui->comboBox->addItem("SITAN");
     ui->comboBox->addItem("TERCOM与ICCP联合");
     ui->comboBox->addItem("自动处理");
+    buildLayout();
+}
+
+// Replaces the .ui layout: inputs in a left panel, result plots + log in a right panel.  All widgets
+// the navigation code touches are kept; the old container widgets are removed at the end.
+void InputPathForm::buildLayout()
+{
+    setWindowTitle(tr("匹配导航"));
+    resize(UiScale::windowSize(1180, 720));
+
+    auto pathRow = [](QLineEdit *edit, QPushButton *button) {
+        edit->setMaximumWidth(QWIDGETSIZE_MAX);
+        edit->setMinimumWidth(0);
+        button->setText(QObject::tr("选择…"));
+        auto *row = new QHBoxLayout;
+        row->setSpacing(8);
+        row->addWidget(edit, 1);
+        row->addWidget(button);
+        return row;
+    };
+
+    // ---- left: inputs (scrollable) + pinned buttons
+    auto *content = new QWidget;
+    auto *ll = new QVBoxLayout(content);
+    ll->setContentsMargins(24, 20, 24, 12);
+    ll->setSpacing(14);
+    ll->addWidget(FormKit::header(QStringLiteral("route"), tr("匹配导航"), tr("选择背景场与航迹，运行地磁匹配导航")));
+
+    ll->addWidget(FormKit::stepHeading(1, tr("输入数据")));
+    ll->addLayout(FormKit::field(tr("背景场"), pathRow(ui->lineEdit_backG, ui->pushButton_backG)));
+    ll->addLayout(FormKit::field(tr("INS 航迹"), pathRow(ui->lineEdit_INS, ui->pushButton_INS)));
+    ll->addLayout(FormKit::field(tr("真实航迹"), pathRow(ui->lineEdit_real, ui->pushButton_real)));
+
+    ll->addSpacing(4);
+    ll->addWidget(FormKit::stepHeading(2, tr("匹配设置")));
+    ll->addLayout(FormKit::field(tr("匹配算法"), ui->comboBox));
+    auto *res = new QHBoxLayout;
+    res->setSpacing(12);
+    res->addLayout(FormKit::field(tr("背景场分辨率 · 经度 X (km)"), ui->doubleSpinBox), 1);
+    res->addLayout(FormKit::field(tr("背景场分辨率 · 纬度 Y (km)"), ui->doubleSpinBox_2), 1);
+    ll->addLayout(res);
+
+    ll->addSpacing(4);
+    ll->addWidget(FormKit::stepHeading(3, tr("输出")));
+    ll->addLayout(FormKit::field(tr("输出结果路径"), pathRow(ui->lineEdit_out, ui->pushButton_out)));
+    ll->addStretch(1);
+
+    auto *scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(content);
+    scroll->viewport()->setAutoFillBackground(false);
+    content->setAutoFillBackground(false);
+
+    leftPanel_ = new QWidget;
+    leftPanel_->setObjectName("navLeft");
+    leftPanel_->setFixedWidth(UiScale::dp(440));
+    leftPanel_->setAttribute(Qt::WA_StyledBackground, true);
+    auto *lp = new QVBoxLayout(leftPanel_);
+    lp->setContentsMargins(0, 0, 0, 0);
+    lp->setSpacing(0);
+    lp->addWidget(scroll, 1);
+
+    ui->pushButton_confirm->setText(tr("开始匹配"));
+    FormKit::setRole(ui->pushButton_confirm, "primary");
+    ui->pushButton_confirm->setMinimumHeight(36);
+    ui->pushButton_confirm->setCursor(Qt::PointingHandCursor);
+    ui->pushButton_cancel->setMinimumHeight(36);
+    auto *footer = new QHBoxLayout;
+    footer->setContentsMargins(24, 10, 24, 18);
+    footer->setSpacing(8);
+    footer->addWidget(ui->pushButton_confirm, 1);
+    footer->addWidget(ui->pushButton_cancel);
+    lp->addLayout(footer);
+
+    // ---- right: status, result plots and log
+    preview_ = new ResultPreviewPanel({ui->verticalWidget_tercom, ui->verticalWidget_iccp, ui->verticalWidget_sitan,
+                                       ui->verticalWidget_tercomiccp, ui->verticalWidget_auto},
+                                      ui->textBrowser);
+
+    // ---- swap: old layout out, new one in (this re-parents every widget used above), then drop the old containers
+    auto *root = new QHBoxLayout;
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+    root->addWidget(leftPanel_);
+    root->addWidget(preview_, 1);
+    delete layout();
+    setLayout(root);
+    const QList<QWidget *> leftovers = findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly);
+    for (QWidget *w : leftovers)
+        if (w != leftPanel_ && w != preview_)
+            delete w;
+
+    auto restyle = [this]() {
+        const ThemeManager &tm = ThemeManager::instance();
+        leftPanel_->setStyleSheet(QStringLiteral("#navLeft { background: %1; border: none; border-right: 1px solid %2; }"
+                                                 "#navLeft QScrollArea { background: transparent; }")
+                                      .arg(tm.hex("n1"), tm.hex("line")));
+    };
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, restyle);
+    restyle();
+
+    // the algorithm slot (connected by setupUi) shows one result page; look again after it ran
+    connect(ui->comboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { preview_->refreshEmptyState(); });
+    on_comboBox_currentIndexChanged(ui->comboBox->currentIndex());
+}
+
+void InputPathForm::setBusy(bool busy)
+{
+    leftPanel_->setEnabled(!busy);
+    ui->pushButton_confirm->setText(busy ? tr("计算中…") : tr("开始匹配"));
+    if (busy)
+        preview_->setStatus(tr("计算中…"), Chip::Accent);
+    else
+        preview_->setStatus(runOk_ ? tr("已完成") : tr("未完成"), runOk_ ? Chip::Ok : Chip::Neutral);
+    QCoreApplication::processEvents();
 }
 
 InputPathForm::~InputPathForm()
@@ -564,6 +692,19 @@ void InputPathForm::on_pushButton_confirm_clicked()
 {
     if (check()!=0)
         return;
+    setBusy(true);
+    runNavigation();
+    // success = the chosen algorithm left its plot in its result page (each run clears the page first)
+    const QList<QWidget *> pages = {ui->verticalWidget_tercom, ui->verticalWidget_iccp, ui->verticalWidget_sitan,
+                                    ui->verticalWidget_tercomiccp, ui->verticalWidget_auto};
+    const int current = ui->comboBox->currentIndex();
+    runOk_ = current >= 0 && current < pages.size() && pages[current]->layout() && pages[current]->layout()->count() > 0;
+    setBusy(false);
+    preview_->refreshEmptyState();
+}
+
+void InputPathForm::runNavigation()
+{
     switch(ui->comboBox->currentIndex())
     {
     case 0:
@@ -606,71 +747,11 @@ void InputPathForm::on_pushButton_cancel_clicked()
 
 void InputPathForm::on_comboBox_currentIndexChanged(int index)
 {
-    switch(index)
-    {
-    case 0://tercom
-    {
-        ui->line_2->setVisible(true);
-        ui->line_3->setVisible(true);
-        ui->gridWidget->setVisible(true);
-        ui->verticalWidget_tercom->setVisible(true);
-        ui->verticalWidget_iccp->setVisible(false);
-        ui->verticalWidget_sitan->setVisible(false);
-        ui->verticalWidget_tercomiccp->setVisible(false);
-        ui->verticalWidget_auto->setVisible(false);
-        break;
-    }
-    case 1:
-    {
-        ui->line_2->setVisible(true);
-        ui->line_3->setVisible(true);
-        ui->gridWidget->setVisible(true);
-        ui->verticalWidget_tercom->setVisible(false);
-        ui->verticalWidget_iccp->setVisible(true);
-        ui->verticalWidget_sitan->setVisible(false);
-        ui->verticalWidget_tercomiccp->setVisible(false);
-        ui->verticalWidget_auto->setVisible(false);
-        break;
-    }
-    case 2:
-    {
-        ui->line_2->setVisible(true);
-        ui->line_3->setVisible(true);
-        ui->gridWidget->setVisible(true);
-        ui->verticalWidget_tercom->setVisible(false);
-        ui->verticalWidget_iccp->setVisible(false);
-        ui->verticalWidget_sitan->setVisible(true);
-        ui->verticalWidget_tercomiccp->setVisible(false);
-        ui->verticalWidget_auto->setVisible(false);
-        break;
-    }
-    case 3:
-    {
-        ui->line_2->setVisible(true);
-        ui->line_3->setVisible(true);
-        ui->gridWidget->setVisible(true);
-        ui->verticalWidget_tercom->setVisible(false);
-        ui->verticalWidget_iccp->setVisible(false);
-        ui->verticalWidget_sitan->setVisible(false);
-        ui->verticalWidget_tercomiccp->setVisible(true);
-        ui->verticalWidget_auto->setVisible(false);
-        break;
-    }
-    case 4:
-    {
-        ui->line_2->setVisible(true);
-        ui->line_3->setVisible(true);
-        ui->gridWidget->setVisible(true);
-        ui->verticalWidget_tercom->setVisible(false);
-        ui->verticalWidget_iccp->setVisible(false);
-        ui->verticalWidget_sitan->setVisible(false);
-        ui->verticalWidget_tercomiccp->setVisible(false);
-        ui->verticalWidget_auto->setVisible(true);
-        break;
-    }
-    default:
-        break;
-    }
+    // one result page per algorithm: tercom, iccp, sitan, tercom + iccp, auto
+    const QList<QWidget *> pages = {ui->verticalWidget_tercom, ui->verticalWidget_iccp, ui->verticalWidget_sitan,
+                                    ui->verticalWidget_tercomiccp, ui->verticalWidget_auto};
+    if (index < 0 || index >= pages.size())
+        return;
+    for (int i = 0; i < pages.size(); ++i)
+        pages[i]->setVisible(i == index);
 }
-
-

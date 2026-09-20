@@ -155,14 +155,14 @@ void TaskDelegate::paint(QPainter *p, const QStyleOptionViewItem &opt, const QMo
 
     QFont tf = opt.font;
     tf.setBold(true);
-    tf.setPixelSize(13);
+    tf.setPointSizeF(9.75);
     p->setFont(tf);
     p->setPen(tm.color("t1"));
     p->drawText(QRect(textLeft, r.top() + 6, textRight - textLeft, 18), Qt::AlignLeft | Qt::AlignVCenter,
                 QFontMetrics(tf).elidedText(title, Qt::ElideRight, textRight - textLeft));
 
     QFont sf = opt.font;
-    sf.setPixelSize(11);
+    sf.setPointSizeF(8.25);
     p->setFont(sf);
     const QRect line2(textLeft, r.top() + 26, textRight - textLeft, 16);
     if (status == TaskListWidget::Running) {

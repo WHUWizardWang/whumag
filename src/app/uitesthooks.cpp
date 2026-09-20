@@ -3,6 +3,9 @@
 #ifdef WHUMAG_UI_TEST
 
 #include <QApplication>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QMessageBox>
 #include <QRadioButton>
 #include <QTreeWidget>
 #include "MagAno/anoqueryform.h"
@@ -93,6 +96,32 @@ void uiTestScheduleForMainWindow(QWidget *mainWindow)
                 QMetaObject::invokeMethod(form, "on_pushButton_3_clicked", Qt::DirectConnection);
             if (anomaly && qEnvironmentVariableIsSet("WHUMAG_TEST_QUERY_DEMO"))
                 QMetaObject::invokeMethod(form, "testFillSynthetic", Qt::DirectConnection);
+        });
+    }
+    // WHUMAG_TEST_AUTO=1 runs the one-click mapping (height 0 km) into a temporary file: shows the form, fills the
+    // inputs, presses "智能处理" and accepts the message boxes that appear, so the busy and finished states can be captured
+    if (qEnvironmentVariableIsSet("WHUMAG_TEST_AUTO")) {
+        QTimer::singleShot(1200, mainWindow, []() {
+            QWidget *form = nullptr;
+            for (QWidget *w : QApplication::allWidgets())
+                if (w->isWindow() && QString::fromLatin1(w->metaObject()->className()) == QLatin1String("AutoReferenceMap"))
+                    form = w;
+            if (!form)
+                return;
+            form->show();
+            if (auto *combo = form->findChild<QComboBox *>("comboBox_height"))
+                combo->setCurrentIndex(1);
+            if (auto *edit = form->findChild<QLineEdit *>("lineEdit_savePath"))
+                edit->setText(QDir::temp().filePath(QStringLiteral("whumag_ui_test_auto.txt")));
+            auto *closer = new QTimer(form);
+            QObject::connect(closer, &QTimer::timeout, form, []() {
+                for (QWidget *w : QApplication::topLevelWidgets())
+                    if (auto *box = qobject_cast<QMessageBox *>(w))
+                        if (box->isVisible())
+                            box->accept();
+            });
+            closer->start(700);
+            QMetaObject::invokeMethod(form, "on_pushButton_clicked", Qt::DirectConnection);
         });
     }
     // WHUMAG_TEST_SHOW=ClassA,ClassB shows every top-level widget of those classes (forms owned by the main window)

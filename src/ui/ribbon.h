@@ -20,6 +20,9 @@ public:
     QSize sizeHint() const override;
     void setLabel(const QString &label) { label_ = label; updateGeometry(); update(); }
 
+    // Button height for a given base font (icon + label), so the ribbon grows with the text size.
+    static int heightHint(const QFont &base);
+
 protected:
     void paintEvent(QPaintEvent *) override;
 
@@ -36,7 +39,8 @@ public:
     enum State { Todo = 0, Current = 1, Done = 2 };
     explicit PipelineProgress(QWidget *parent = nullptr);
     void setStates(const QVector<int> &states);
-    QSize sizeHint() const override { return QSize(420, 76); }
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override { return sizeHint(); }
 
 protected:
     void paintEvent(QPaintEvent *) override;

@@ -114,7 +114,7 @@ void QueryForm::fill_item_model(MAGtype_CoordGeodetic *CoordGeodeticArr,
     QFont mono;
     mono.setFamilies({QStringLiteral("Cascadia Mono"), QStringLiteral("Consolas"), QStringLiteral("Courier New")});
     mono.setStyleHint(QFont::Monospace);
-    mono.setPixelSize(12);
+    mono.setPointSizeF(9);
     auto put = [this, &mono](int row, int col, const QString &text) {
         auto *item = new QStandardItem(text);
         item->setFont(mono);

@@ -2,6 +2,7 @@
 
 #include "thememanager.h"
 #include "uiicons.h"
+#include "uiscale.h"
 #include "uiwidgets.h"
 
 #include <QAction>
@@ -27,12 +28,49 @@ RibbonButton::RibbonButton(const QString &label, const QString &iconName, QWidge
     connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, QOverload<>::of(&QWidget::update));
 }
 
+namespace {
+constexpr int kBtnTop = 8;      // above the icon
+constexpr int kBtnIcon = 22;
+constexpr int kBtnGap = 6;      // icon -> label
+constexpr int kBtnBottom = 6;
+
+QFont buttonLabelFont(const QFont &base)
+{
+    QFont f = base;
+    f.setPointSizeF(9);
+    return f;
+}
+
+int labelHeight(const QFont &base)
+{
+    return qMax(QFontMetrics(buttonLabelFont(base)).height(), 18);
+}
+
+int captionHeight(const QFont &base)
+{
+    QFont f = base;
+    f.setPointSizeF(8.25);
+    return qMax(QFontMetrics(f).height() + 2, 16);
+}
+
+constexpr int kPipeDot = 16, kPipeGap = 6, kPipeConn = 20, kPipeConnGap = 8;
+
+// Names shown by the progress strip
+QStringList stageNames()
+{
+    return {QStringLiteral("数据"), QStringLiteral("预处理"), QStringLiteral("建图"), QStringLiteral("评估"), QStringLiteral("导航")};
+}
+} // namespace
+
+int RibbonButton::heightHint(const QFont &base)
+{
+    return kBtnTop + kBtnIcon + kBtnGap + labelHeight(base) + kBtnBottom;
+}
+
 QSize RibbonButton::sizeHint() const
 {
-    QFont f = font();
-    f.setPixelSize(12);
-    const int textW = QFontMetrics(f).horizontalAdvance(label_) + (menu() ? 14 : 0);
-    return QSize(qMax(64, textW + 20), 60);
+    const int textW = QFontMetrics(buttonLabelFont(font())).horizontalAdvance(label_) + (menu() ? 14 : 0);
+    return QSize(qMax(UiScale::dp(64), textW + 20), heightHint(font()));
 }
 
 void RibbonButton::paintEvent(QPaintEvent *)
@@ -57,11 +95,9 @@ void RibbonButton::paintEvent(QPaintEvent *)
     QColor fg = isChecked() ? tm.color("accInk") : tm.color("t1");
     if (!enabled)
         fg.setAlphaF(0.42);
-    const int iconSize = 22;
-    p.drawPixmap(qRound((width() - iconSize) / 2.0), 8, UiIcons::pixmap(icon_, iconSize, fg, 1.6, devicePixelRatioF()));
+    p.drawPixmap(qRound((width() - kBtnIcon) / 2.0), kBtnTop, UiIcons::pixmap(icon_, kBtnIcon, fg, 1.6, devicePixelRatioF()));
 
-    QFont f = font();
-    f.setPixelSize(12);
+    QFont f = buttonLabelFont(font());
     f.setBold(isChecked());
     p.setFont(f);
     p.setPen(fg);
@@ -69,9 +105,11 @@ void RibbonButton::paintEvent(QPaintEvent *)
     const int textW = QFontMetrics(f).horizontalAdvance(label_);
     const int total = textW + chevronW;
     const int x0 = (width() - total) / 2;
-    p.drawText(QRect(x0, 36, textW + 2, 18), Qt::AlignLeft | Qt::AlignVCenter, label_);
+    const int textTop = kBtnTop + kBtnIcon + kBtnGap;
+    const int textH = labelHeight(font());
+    p.drawText(QRect(x0, textTop, textW + 2, textH), Qt::AlignLeft | Qt::AlignVCenter, label_);
     if (menu())
-        p.drawPixmap(x0 + textW + 2, 40, UiIcons::pixmap("chev-down", 10, fg, 2.2, devicePixelRatioF()));
+        p.drawPixmap(x0 + textW + 2, textTop + (textH - 10) / 2, UiIcons::pixmap("chev-down", 10, fg, 2.2, devicePixelRatioF()));
 }
 
 // ---------------------------------------------------------------- PipelineProgress
@@ -94,19 +132,22 @@ void PipelineProgress::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
 
-    static const char *names[] = {"数据", "预处理", "建图", "评估", "导航"};
+    const QStringList names = stageNames();
     QFont f = font();
-    f.setPixelSize(12);
+    f.setPointSizeF(9);
     const QFontMetrics fm(f);
+    QFont cf = font();
+    cf.setPointSizeF(8.25);
+    const int captionH = QFontMetrics(cf).height() + 2;
 
     // total width: dot + label per stage, connectors between
-    const int dot = 16, gap = 6, conn = 20, connGap = 8;
+    const int dot = kPipeDot, gap = kPipeGap, conn = kPipeConn, connGap = kPipeConnGap;
     int total = 0;
     for (int i = 0; i < 5; ++i)
-        total += dot + gap + fm.horizontalAdvance(QString::fromUtf8(names[i]));
+        total += dot + gap + fm.horizontalAdvance(names[i]);
     total += 4 * (conn + 2 * connGap);
     int x = qMax(8, (width() - total) / 2);
-    const int cy = 30;
+    const int cy = (height() - captionH - 4) / 2 - 2;   // centre of the area above the caption
 
     for (int i = 0; i < 5; ++i) {
         const int st = i < states_.size() ? states_[i] : Todo;
@@ -134,7 +175,7 @@ void PipelineProgress::paintEvent(QPaintEvent *)
         lf.setBold(st == Current);
         p.setFont(lf);
         p.setPen(st == Current ? tm.color("t1") : (st == Done ? tm.color("t2") : tm.color("t3")));
-        const QString label = QString::fromUtf8(names[i]);
+        const QString label = names[i];
         const int w = fm.horizontalAdvance(label);
         p.drawText(QRect(x, cy - 10, w + 4, 20), Qt::AlignLeft | Qt::AlignVCenter, label);
         x += w;
@@ -148,18 +189,29 @@ void PipelineProgress::paintEvent(QPaintEvent *)
         }
     }
 
-    QFont cf = font();
-    cf.setPixelSize(11);
     p.setFont(cf);
     p.setPen(tm.color("t3"));
-    p.drawText(QRect(0, height() - 20, width(), 16), Qt::AlignHCenter | Qt::AlignVCenter, tr("工程进度"));
+    p.drawText(QRect(0, height() - captionH - 4, width(), captionH), Qt::AlignHCenter | Qt::AlignVCenter, tr("工程进度"));
+}
+
+QSize PipelineProgress::sizeHint() const
+{
+    QFont f = font();
+    f.setPointSizeF(9);
+    f.setBold(true);   // the current stage is drawn bold
+    const QFontMetrics fm(f);
+    int total = 0;
+    for (const QString &name : stageNames())
+        total += kPipeDot + kPipeGap + fm.horizontalAdvance(name);
+    total += 4 * (kPipeConn + 2 * kPipeConnGap);
+    return QSize(total + 2 * 20, 76);
 }
 
 // ---------------------------------------------------------------- Ribbon
 Ribbon::Ribbon(QWidget *parent) : QWidget(parent)
 {
     setObjectName("ribbon");
-    setFixedHeight(84);
+    setFixedHeight(RibbonButton::heightHint(font()) + captionHeight(font()) + 8);
     stack_ = new QStackedWidget(this);
     pipeline_ = new PipelineProgress(this);
 
@@ -210,7 +262,7 @@ QWidget *Ribbon::buildPage(const Stage &stage)
 
     // stage title block
     auto *head = new QWidget;
-    head->setFixedWidth(184);
+    head->setFixedWidth(UiScale::dp(184));
     auto *hl = new QHBoxLayout(head);
     hl->setContentsMargins(16, 0, 14, 0);
     hl->setSpacing(10);
@@ -219,11 +271,11 @@ QWidget *Ribbon::buildPage(const Stage &stage)
     titles->setSpacing(2);
     titles->addStretch(1);
     auto *name = new QLabel(stage.name);
-    name->setStyleSheet("font-size: 15px; font-weight: 700;");
+    name->setStyleSheet("font-size: 11.25pt; font-weight: 700;");
     auto *desc = new QLabel(stage.description);
     desc->setProperty("role", QStringLiteral("hint"));
     desc->setWordWrap(true);
-    desc->setStyleSheet("font-size: 11px;");
+    desc->setStyleSheet("font-size: 8.25pt;");
     titles->addWidget(name);
     titles->addWidget(desc);
     titles->addStretch(1);
@@ -243,7 +295,7 @@ QWidget *Ribbon::buildPage(const Stage &stage)
         buttons->setSpacing(2);
         for (const Button &b : g.buttons) {
             auto *btn = new RibbonButton(b.label, b.icon);
-            btn->setFixedSize(qMax(b.width, btn->sizeHint().width()), 60);
+            btn->setFixedSize(qMax(UiScale::dp(b.width), btn->sizeHint().width()), btn->sizeHint().height());
             if (b.menu) {
                 btn->setMenu(b.menu);
                 btn->setPopupMode(QToolButton::InstantPopup);
@@ -258,8 +310,8 @@ QWidget *Ribbon::buildPage(const Stage &stage)
         auto *cap = new QLabel(g.caption);
         cap->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
         cap->setProperty("role", QStringLiteral("hint"));
-        cap->setStyleSheet("font-size: 11px;");
-        cap->setFixedHeight(16);
+        cap->setStyleSheet("font-size: 8.25pt;");
+        cap->setFixedHeight(captionHeight(font()));
         gl->addWidget(cap);
         row->addWidget(group);
     }

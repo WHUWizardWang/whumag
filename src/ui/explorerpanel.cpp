@@ -24,7 +24,7 @@ ExplorerPanel::ExplorerPanel(QTreeWidget *tree, QWidget *parent) : QWidget(paren
 
     auto *title = new QLabel(tr("工程"));
     title->setProperty("role", QStringLiteral("section"));
-    title->setStyleSheet("font-size: 13px;");
+    title->setStyleSheet("font-size: 9.75pt;");
     openBtn_ = new QToolButton;
     openBtn_->setToolTip(tr("打开工程…"));
     openBtn_->setAutoRaise(true);
@@ -186,7 +186,7 @@ void ExplorerPanel::setProperties(const QVector<QPair<QString, QString>> &rows)
         k->setProperty("role", QStringLiteral("hint"));
         auto *v = new ElideLabel(kv.second);
         v->setProperty("role", QStringLiteral("mono"));
-        v->setStyleSheet("font-size: 11px;");
+        v->setStyleSheet("font-size: 8.25pt;");
         propsGrid_->addWidget(k, r, 0, Qt::AlignTop);
         propsGrid_->addWidget(v, r, 1);
         ++r;

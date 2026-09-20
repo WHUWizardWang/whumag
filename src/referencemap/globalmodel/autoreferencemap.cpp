@@ -1,6 +1,17 @@
 ﻿#include "autoreferencemap.h"
 #include "ui_autoreferencemap.h"
 
+#include "formkit.h"
+#include "resultpreviewpanel.h"
+#include "thememanager.h"
+#include "uiscale.h"
+#include "uiwidgets.h"
+
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QVBoxLayout>
+
 
 AutoReferenceMap::AutoReferenceMap(QWidget *parent) :
     QWidget(parent),
@@ -10,9 +21,7 @@ AutoReferenceMap::AutoReferenceMap(QWidget *parent) :
     // 初始化：设置自动和手动参数设置按钮
     QButtonGroup *block = new QButtonGroup(this);
     block->setExclusive(true);
-    if (!loadResourceFile()) {
-        QMessageBox::critical(this, "错误", "无法加载必要的数据文件，应用可能无法正常工作");
-    }
+    loadResourceFile();   // a failure is shown inside the form (see buildLayout), not as start-up dialogs
     // 初始化：6个建模方法，comboBox_model
     QStringList heights = {"-0.3","0","0.25","0.5","0.75"};
     ui->comboBox_height->addItems(heights);
@@ -22,6 +31,103 @@ AutoReferenceMap::AutoReferenceMap(QWidget *parent) :
     ui->comboBox_data->addItems(nameList_real);
     // 初始化：保存文件名
 
+    buildLayout();
+}
+
+// Replaces the .ui layout: inputs in a left panel, preview + log in a right panel.  All widgets the
+// processing code touches are kept; only the container widgets of the old layout are removed.
+void AutoReferenceMap::buildLayout()
+{
+    setWindowTitle(tr("一键成图"));
+    resize(UiScale::windowSize(1180, 700));
+
+    // ---- left: header, three steps, run button
+    leftPanel_ = new QWidget;
+    leftPanel_->setObjectName("autoLeft");
+    leftPanel_->setFixedWidth(UiScale::dp(420));
+    leftPanel_->setAttribute(Qt::WA_StyledBackground, true);
+    auto *ll = new QVBoxLayout(leftPanel_);
+    ll->setContentsMargins(24, 20, 24, 18);
+    ll->setSpacing(14);
+    ll->addWidget(FormKit::header(QStringLiteral("spark"), tr("一键成图"), tr("选择数据与建图参数，一键生成基准图")));
+
+    if (!resourceError_.isEmpty())
+    {
+        auto *banner = new Banner;
+        banner->setContent(Banner::Warn, tr("一键成图暂不可用"),
+                           resourceError_ + tr("。请把 high_quality.rcc 放到程序目录的 resources 文件夹。"));
+        ll->addWidget(banner);
+        ui->pushButton->setEnabled(false);
+    }
+
+    ll->addWidget(FormKit::stepHeading(1, tr("选择数据")));
+    ll->addLayout(FormKit::field(tr("水面数据"), ui->comboBox_data));
+    ll->addLayout(FormKit::field(tr("低空数据"), ui->comboBox_airdata));
+
+    ll->addSpacing(4);
+    ll->addWidget(FormKit::stepHeading(2, tr("建图参数")));
+    auto *res = new QHBoxLayout;
+    res->setSpacing(12);
+    res->addLayout(FormKit::field(tr("插值分辨率 · 经度 (X)"), ui->doubleSpinBox_dx), 1);
+    res->addLayout(FormKit::field(tr("插值分辨率 · 纬度 (Y)"), ui->doubleSpinBox_dy), 1);
+    ll->addLayout(res);
+    ui->comboBox_height->setPlaceholderText(tr("请选择建图高度"));
+    ll->addLayout(FormKit::field(tr("建图高度 (km)"), ui->comboBox_height));
+
+    ll->addSpacing(4);
+    ll->addWidget(FormKit::stepHeading(3, tr("保存结果")));
+    auto *saveRow = new QHBoxLayout;
+    saveRow->setSpacing(8);
+    saveRow->addWidget(ui->lineEdit_savePath, 1);
+    ui->pushButton_save->setText(tr("浏览…"));
+    saveRow->addWidget(ui->pushButton_save);
+    ll->addLayout(FormKit::field(tr("保存路径"), saveRow));
+
+    ll->addStretch(1);
+    ui->pushButton->setText(tr("智能处理"));
+    FormKit::setRole(ui->pushButton, "primary");
+    ui->pushButton->setMinimumHeight(36);
+    ui->pushButton->setCursor(Qt::PointingHandCursor);
+    ll->addWidget(ui->pushButton);
+
+    // ---- right: status, preview card and log
+    preview_ = new ResultPreviewPanel({ui->widget_pic0, ui->widget_pic1, ui->widget_pic2, ui->widget_pic3, ui->widght_pic4},
+                                      ui->textBrowser);
+
+    // ---- swap: old layout out, new one in (this re-parents every widget used above), then drop the old containers
+    auto *root = new QHBoxLayout;
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+    root->addWidget(leftPanel_);
+    root->addWidget(preview_, 1);
+    delete layout();
+    setLayout(root);
+    delete ui->widget_data;
+    delete ui->widget_confirm;
+    delete ui->widget;
+    delete ui->line;
+    delete ui->line_2;
+
+    auto restyle = [this]() {
+        const ThemeManager &tm = ThemeManager::instance();
+        leftPanel_->setStyleSheet(QStringLiteral("#autoLeft { background: %1; border: none; border-right: 1px solid %2; }").arg(tm.hex("n1"), tm.hex("line")));
+    };
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, restyle);
+    restyle();
+
+    // the height slot (connected by setupUi) shows / hides the five result containers; look again after it ran
+    connect(ui->comboBox_height, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { preview_->refreshEmptyState(); });
+}
+
+void AutoReferenceMap::setBusy(bool busy)
+{
+    leftPanel_->setEnabled(!busy);
+    ui->pushButton->setText(busy ? tr("处理中…") : tr("智能处理"));
+    if (busy)
+        preview_->setStatus(tr("处理中…"), Chip::Accent);
+    else
+        preview_->setStatus(runOk_ ? tr("已完成") : tr("未完成"), runOk_ ? Chip::Ok : Chip::Neutral);
+    QCoreApplication::processEvents();
 }
 
 AutoReferenceMap::~AutoReferenceMap()
@@ -103,6 +209,15 @@ void AutoReferenceMap::on_comboBox_height_currentIndexChanged(int index)
 
 void AutoReferenceMap::on_pushButton_clicked()
 {
+    runOk_ = false;
+    setBusy(true);
+    runMapping();
+    setBusy(false);
+    preview_->refreshEmptyState();
+}
+
+void AutoReferenceMap::runMapping()
+{
     dx = this->ui->doubleSpinBox_dx->value();
     dy = this->ui->doubleSpinBox_dy->value();
     switch (heightIndex)
@@ -181,6 +296,7 @@ void AutoReferenceMap::on_pushButton_clicked()
             ui->textBrowser->append("计算完成!\n");
             // 更新主界面的树
             emit treeUpdated(1);
+            runOk_ = true;
             //
             draw_Form *draw_form_ = new draw_Form;
             QVector<double> xx,yy,zz;
@@ -275,6 +391,7 @@ void AutoReferenceMap::on_pushButton_clicked()
             ui->textBrowser->append("计算完成!\n");
             // 更新主界面的树
             emit treeUpdated(1);
+            runOk_ = true;
             //
             draw_Form *draw_form_ = new draw_Form;
             QVector<double> xx,yy,zz;
@@ -366,6 +483,7 @@ void AutoReferenceMap::on_pushButton_clicked()
             ui->textBrowser->append("计算完成!\n");
             // 更新主界面的树
             emit treeUpdated(1);
+            runOk_ = true;
             //
             draw_Form *draw_form_ = new draw_Form;
             QVector<double> xx,yy,zz;
@@ -457,6 +575,7 @@ void AutoReferenceMap::on_pushButton_clicked()
             ui->textBrowser->append("计算完成!\n");
             // 更新主界面的树
             emit treeUpdated(1);
+            runOk_ = true;
             //
             draw_Form *draw_form_ = new draw_Form;
             QVector<double> xx,yy,zz;
@@ -548,6 +667,7 @@ void AutoReferenceMap::on_pushButton_clicked()
             ui->textBrowser->append("计算完成!\n");
             // 更新主界面的树
             emit treeUpdated(1);
+            runOk_ = true;
             //
             draw_Form *draw_form_ = new draw_Form;
             QVector<double> xx,yy,zz;
@@ -582,14 +702,16 @@ bool AutoReferenceMap::loadResourceFile()
     // 检查文件是否存在
     QFileInfo checkFile(rccPath);
     if (!checkFile.exists()) {
-        QMessageBox::critical(this, "错误", "找不到资源文件: " + rccPath);
+        resourceError_ = tr("找不到资源文件 %1").arg(rccPath);
+        ui->textBrowser->append(resourceError_);
         return false;
     }
 
     // 注册资源文件
     bool success = QResource::registerResource(rccPath);
     if (!success) {
-        QMessageBox::critical(this, "错误", "加载资源文件失败: " + rccPath);
+        resourceError_ = tr("加载资源文件失败：%1").arg(rccPath);
+        ui->textBrowser->append(resourceError_);
         return false;
     }
 

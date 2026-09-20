@@ -40,6 +40,8 @@ signals:
     void treeUpdated(int flag); // 定义信号
 
 private:
+    void buildLayout();
+
     Ui::mergeForm *ui;
 
 };

@@ -117,7 +117,7 @@ void Chip::restyle()
     default: bg = "n4"; fg = "t2"; line = "line"; break;
     }
     setStyleSheet(QStringLiteral("QLabel { background: %1; color: %2; border: 1px solid %3; border-radius: 9px;"
-                                 " padding: 1px 8px; font-size: 11px; font-weight: 500; }")
+                                 " padding: 1px 8px; font-size: 8.25pt; font-weight: 500; }")
                       .arg(tm.hex(bg), tm.hex(fg), tm.hex(line)));
 }
 
@@ -230,10 +230,10 @@ StatCard::StatCard(const QString &caption, QWidget *parent) : QFrame(parent)
     lay->setSpacing(0);
     caption_ = new QLabel(caption);
     caption_->setProperty("role", QStringLiteral("hint"));
-    caption_->setStyleSheet("font-size: 11px;");
+    caption_->setStyleSheet("font-size: 8.25pt;");
     value_ = new QLabel(QStringLiteral("—"));
     value_->setProperty("role", QStringLiteral("mono"));
-    value_->setStyleSheet("font-size: 15px; font-weight: 500;");
+    value_->setStyleSheet("font-size: 11.25pt; font-weight: 500;");
     lay->addWidget(caption_);
     lay->addWidget(value_);
 }

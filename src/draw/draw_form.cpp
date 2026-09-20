@@ -8,6 +8,21 @@ draw_Form::draw_Form(QWidget *parent) :
     ui->setupUi(this);
     ui->tabWidget->setTabText(0,"热力图");
     ui->tabWidget->setTabText(1,"等值线图");
+
+    // save row: the path edit takes the free width, "保存" is the main action
+    ui->horizontalLayout->removeItem(ui->horizontalSpacer);
+    ui->horizontalLayout->removeItem(ui->horizontalSpacer_3);
+    delete ui->horizontalSpacer;
+    delete ui->horizontalSpacer_3;
+    ui->horizontalLayout->removeWidget(ui->lineEdit);
+    ui->horizontalLayout->insertWidget(0, ui->lineEdit, 1);
+    ui->horizontalLayout->setSpacing(8);
+    ui->verticalLayout_2->setContentsMargins(8, 4, 8, 8);
+    ui->lineEdit->setMaximumWidth(QWIDGETSIZE_MAX);
+    ui->lineEdit->setPlaceholderText(tr("图片保存路径（.png）"));
+    ui->pushButton_path->setText(tr("选择路径…"));
+    ui->pushButton_save->setText(tr("保存为图片"));
+    ui->pushButton_save->setProperty("role", QStringLiteral("primary"));
 }
 void draw_Form::setMapStep(double dx,double dy)
 {
@@ -202,19 +217,30 @@ void draw_Form::on_pushButton_path_clicked()
 
 void draw_Form::on_pushButton_save_clicked()
 {
-    QString path = ui->lineEdit->text();
+    QString path = ui->lineEdit->text().trimmed();
+    if (path.isEmpty())
+    {
+        QMessageBox::warning(this, "保存图片", "请先选择保存路径。");
+        return;
+    }
+    if (!path.endsWith(".png", Qt::CaseInsensitive))
+        path += ".png";
     int currentIndex = ui->tabWidget->currentIndex();
+    bool saved = false;
     if (currentIndex == 0)
     {
         QPixmap pixmap = QPixmap::grabWidget(ui->tab_heatmap);
-        pixmap.save(path,"PNG");
+        saved = pixmap.save(path,"PNG");
     }
     else if (currentIndex == 1)
     {
         QPixmap pixmap = QPixmap::grabWidget(ui->tab_counter);
-        pixmap.save(path,"PNG");
+        saved = pixmap.save(path,"PNG");
     }
-    QMessageBox::information(nullptr,"保存完成","文件已成功保存!");
+    if (saved)
+        QMessageBox::information(this,"保存完成","图片已保存到：\n" + path);
+    else
+        QMessageBox::warning(this,"保存失败","无法写入：\n" + path);
 }
 void draw_Form::autoset_heatMapView(QVector<double> xx, QVector<double> yy, QVector<double> result)
 {

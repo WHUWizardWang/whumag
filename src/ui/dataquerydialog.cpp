@@ -1,6 +1,7 @@
 #include "dataquerydialog.h"
 
 #include "thememanager.h"
+#include "uiscale.h"
 #include "uiwidgets.h"
 
 #include <QHBoxLayout>
@@ -15,8 +16,8 @@ DataQueryDialog::DataQueryDialog(QWidget *globalModelForm, QWidget *anomalyForm,
     setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     setWindowFlag(Qt::WindowMinMaxButtonsHint, true);
     setSizeGripEnabled(true);
-    resize(1180, 760);
-    setMinimumSize(980, 640);
+    resize(UiScale::windowSize(1180, 760));
+    setMinimumSize(UiScale::windowSize(980, 640));
 
     header_ = new QWidget;
     header_->setObjectName("queryDialogHeader");
@@ -27,7 +28,7 @@ DataQueryDialog::DataQueryDialog(QWidget *globalModelForm, QWidget *anomalyForm,
     hl->addWidget(new IconBadge(QStringLiteral("database"), 34, 18));
     auto *title = new QLabel(tr("数据查询"));
     title->setProperty("role", QStringLiteral("h1"));
-    title->setStyleSheet("font-size: 17px;");
+    title->setStyleSheet("font-size: 12.75pt;");
     hl->addWidget(title);
     hl->addSpacing(10);
     segmented_ = new SegmentedControl({tr("全球磁场模型"), tr("全球磁异常")});

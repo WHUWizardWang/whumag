@@ -15,6 +15,8 @@ class AUTONAV;
 class SitanMatching;
 }
 
+class ResultPreviewPanel;
+
 class InputPathForm : public QWidget
 {
     Q_OBJECT
@@ -45,7 +47,14 @@ private slots:
 
 
 private:
+    void buildLayout();     // 新版布局（构造函数末尾调用）
+    void runNavigation();   // 按所选算法运行（原有流程）
+    void setBusy(bool busy);
+
     Ui::InputPathForm *ui;
+    bool runOk_ = false;
+    QWidget *leftPanel_ = nullptr;
+    ResultPreviewPanel *preview_ = nullptr;
     Geomagnetic::AUTONAV* anav;
     Geomagnetic::SitanMatching* st;
 };

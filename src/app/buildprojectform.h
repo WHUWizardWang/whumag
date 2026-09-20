@@ -34,6 +34,8 @@ private slots:
     void on_btn_ok_clicked();
 
 private:
+    void buildLayout();
+
     Ui::BuildProjectForm *ui;
 
     GeoMagnetismProject *geomag_proj_;

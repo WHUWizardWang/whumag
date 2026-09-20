@@ -21,6 +21,8 @@ namespace Ui {
 class ReferenceMap;
 }
 
+class ResultPreviewPanel;
+
 class ReferenceMap : public QWidget
 {
     Q_OBJECT
@@ -44,7 +46,14 @@ private slots:
     void on_pushButton_2_clicked();
 
 private:
+    void buildLayout();           // 新版布局（构造函数末尾调用）
+    void runModeling();           // 原有的建模流程，由 on_pushButton_clicked 包装
+    void setBusy(bool busy);
+
     Ui::ReferenceMap *ui;
+    bool runOk_ = false;          // 最近一次处理是否成功
+    QWidget *leftPanel_ = nullptr;
+    ResultPreviewPanel *preview_ = nullptr;
     maptaylorlegendreform *taylorlegendre_form_;      // 参数界面:taylor和legendre
     mappolyhedralform *polyhedral_form_;              // 参数界面:polyhedral
     mapsplineform *spline_form_;                      // 参数界面:spline

@@ -1,6 +1,16 @@
 #include "mergeform.h"
 #include "ui_mergeform.h"
 
+#include "formkit.h"
+#include "uiscale.h"
+
+#include <QGridLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QVBoxLayout>
+
 
 mergeForm::mergeForm(QWidget *parent) :
     QWidget(parent),
@@ -8,17 +18,99 @@ mergeForm::mergeForm(QWidget *parent) :
 {
     ui->setupUi(this);
     //
-    QStandardItemModel *model = new QStandardItemModel(3,2,this);
-    model->setHorizontalHeaderLabels({"filepath","error"});
+    QStandardItemModel *model = new QStandardItemModel(0,2,this);
+    model->setHorizontalHeaderLabels({"文件","中误差"});
     ui->tableView->setModel(model);
     ui->tableView->setColumnWidth(1,60);
     ui->tableView->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
-
+    buildLayout();
 }
 
 mergeForm::~mergeForm()
 {
     delete ui;
+}
+
+// Replaces the .ui layout with a sectioned one.  The .ui only has captions besides the widgets used
+// by the code, and no code refers to those captions, so they are simply replaced.
+void mergeForm::buildLayout()
+{
+    qDeleteAll(findChildren<QLabel *>());
+    setWindowTitle(tr("数据融合"));
+    resize(UiScale::windowSize(720, 660));
+    setMinimumWidth(UiScale::dp(620));
+
+    auto *root = new QVBoxLayout;
+    root->setContentsMargins(26, 22, 26, 18);
+    root->setSpacing(12);
+    root->addWidget(FormKit::header(QStringLiteral("merge"), tr("数据融合"), tr("把多条测线融合为一个网格数据")));
+
+    // 1  files
+    ui->chooseFiles->setText(tr("选择文件…"));
+    auto *filesHead = new QHBoxLayout;
+    filesHead->addWidget(FormKit::stepHeading(1, tr("选择测线文件")), 1);
+    filesHead->addWidget(ui->chooseFiles);
+    root->addLayout(filesHead);
+    ui->tableView->setMinimumHeight(UiScale::dp(140));
+    FormKit::emptyStateFor(ui->tableView, tr("尚未选择文件"), tr("点击右上角“选择文件…”，一次选择多个测线文件"));
+    root->addWidget(ui->tableView, 1);
+    root->addWidget(FormKit::hint(tr("请选择多个文件，并在“中误差”列填写每个文件的中误差（不能为 0）。")));
+
+    // 2  range and grid
+    root->addSpacing(2);
+    root->addWidget(FormKit::stepHeading(2, tr("融合范围与网格")));
+    auto *grid = new QGridLayout;
+    grid->setHorizontalSpacing(10);
+    grid->setVerticalSpacing(8);
+    auto light = [](const QString &text, Qt::Alignment align) {
+        auto *l = new QLabel(text);
+        l->setProperty("role", QStringLiteral("field"));
+        l->setAlignment(align | Qt::AlignVCenter);
+        return l;
+    };
+    const QStringList heads = {tr("从"), tr("到"), tr("间隔"), tr("窗口大小")};
+    for (int c = 0; c < 4; ++c)
+        grid->addWidget(light(heads[c], Qt::AlignHCenter), 0, c + 1);
+    grid->addWidget(light(tr("经度 / X"), Qt::AlignLeft), 1, 0);
+    grid->addWidget(light(tr("纬度 / Y"), Qt::AlignLeft), 2, 0);
+    QLineEdit *lon[] = {ui->lineEdit_lon_min, ui->lineEdit_lon_max, ui->lineEdit_lon_step, ui->lineEdit_lonx};
+    QLineEdit *lat[] = {ui->lineEdit_lat_min, ui->lineEdit_lat_max, ui->lineEdit_lat_step, ui->lineEdit_laty};
+    for (int c = 0; c < 4; ++c)
+    {
+        for (QLineEdit *edit : {lon[c], lat[c]})
+        {
+            edit->setMinimumWidth(0);
+            edit->setMaximumWidth(QWIDGETSIZE_MAX);
+            edit->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        }
+        grid->addWidget(lon[c], 1, c + 1);
+        grid->addWidget(lat[c], 2, c + 1);
+        grid->setColumnStretch(c + 1, 1);
+    }
+    root->addLayout(grid);
+
+    // 3  output file
+    root->addSpacing(2);
+    root->addWidget(FormKit::stepHeading(3, tr("保存结果")));
+    ui->lineEdit->setMaximumWidth(QWIDGETSIZE_MAX);
+    ui->pushButton->setText(tr("选择…"));
+    auto *saveRow = new QHBoxLayout;
+    saveRow->setSpacing(8);
+    saveRow->addWidget(ui->lineEdit, 1);
+    saveRow->addWidget(ui->pushButton);
+    root->addLayout(FormKit::field(tr("保存文件名"), saveRow));
+
+    ui->confirm->setText(tr("开始融合"));
+    FormKit::setRole(ui->confirm, "primary");
+    ui->confirm->setMinimumSize(UiScale::dp(120), 36);
+    ui->confirm->setCursor(Qt::PointingHandCursor);
+    auto *footer = new QHBoxLayout;
+    footer->addStretch(1);
+    footer->addWidget(ui->confirm);
+    root->addLayout(footer);
+
+    delete layout();
+    setLayout(root);
 }
 
 void mergeForm::on_chooseFiles_clicked()
@@ -28,12 +120,19 @@ void mergeForm::on_chooseFiles_clicked()
     fileNames = QFileDialog::getOpenFileNames(this, tr("打开数据"),
                                                   QCoreApplication::applicationFilePath(),
                                                   tr("All Files (*.*);;文本文件 (*.txt *.dat *.csv)"));
-    if(fileNames.isEmpty() || fileNames.size() == 1)
+    if (fileNames.isEmpty())
+        return;   // dialog cancelled
+    if (fileNames.size() == 1)
     {
        QMessageBox::warning(this,"警告","请选择多个文件");
+       return;
     }
     //
-    QStandardItemModel *model = new QStandardItemModel(fileNames.size(),2,this);
+    // keep one model for the table's lifetime (the empty-table hint follows it)
+    auto *model = qobject_cast<QStandardItemModel *>(ui->tableView->model());
+    model->clear();
+    model->setColumnCount(2);
+    model->setRowCount(fileNames.size());
     model->setHorizontalHeaderLabels({"文件","中误差"});
     for (int i =0 ;i<fileNames.size();i++)
     {
@@ -41,7 +140,6 @@ void mergeForm::on_chooseFiles_clicked()
         model->setItem(i,0,item);
         myMerge.doc.push_back(fileNames.at(i).toStdString());
     }
-    ui->tableView->setModel(model);
     ui->tableView->setColumnWidth(1,60);
     ui->tableView->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
 }
@@ -80,6 +178,11 @@ void mergeForm::on_confirm_clicked()
     emit textUpdated("数据及参数读取开始...");
     QCoreApplication::processEvents();
     readTable();
+    if (filecount < 2)
+    {
+        QMessageBox::warning(this,"警告","请先选择多个测线文件");
+        return;
+    }
     for (int i=0;i<filecount;i++)
     {
         if(myMerge.doc_m[i]==0)
@@ -165,6 +268,7 @@ void mergeForm::on_pushButton_clicked()
     // 选择背景文件
     QString tmp = QFileDialog::getSaveFileName(this, tr("请选择保存文件"),
                                                QCoreApplication::applicationFilePath(),"*.*");
-    ui->lineEdit->setText(tmp);
+    if (!tmp.isEmpty())
+        ui->lineEdit->setText(tmp);
 }
 

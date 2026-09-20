@@ -1,6 +1,8 @@
 #include "queryformshell.h"
 
+#include "formkit.h"
 #include "thememanager.h"
+#include "uiscale.h"
 #include "uiwidgets.h"
 
 #include <QAbstractItemModel>
@@ -35,56 +37,6 @@ QString panelStyle(const QString &objectName, const char *bg, const char *border
         .arg(objectName, tm.hex(bg), borderSide ? QStringLiteral("border-%1: 1px solid %2;").arg(QString::fromLatin1(borderSide), tm.hex("line")) : QString());
 }
 
-// Centered "尚无结果" hint on the table's viewport while the model has no rows, so an empty
-// result table reads as "nothing yet" instead of a blank area.
-class EmptyOverlay : public QObject
-{
-public:
-    explicit EmptyOverlay(QTableView *table) : QObject(table), table_(table), label_(new QLabel(table->viewport()))
-    {
-        label_->setAlignment(Qt::AlignCenter);
-        label_->setTextFormat(Qt::RichText);
-        label_->setAttribute(Qt::WA_TransparentForMouseEvents);
-        table->viewport()->installEventFilter(this);
-        if (QAbstractItemModel *m = table->model()) {
-            auto refresh = [this]() { update(); };
-            QObject::connect(m, &QAbstractItemModel::rowsInserted, this, refresh);
-            QObject::connect(m, &QAbstractItemModel::rowsRemoved, this, refresh);
-            QObject::connect(m, &QAbstractItemModel::modelReset, this, refresh);
-            QObject::connect(m, &QAbstractItemModel::layoutChanged, this, refresh);
-        }
-        QObject::connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, [this]() { restyle(); });
-        restyle();
-        update();
-    }
-
-    bool eventFilter(QObject *watched, QEvent *event) override
-    {
-        if (watched == table_->viewport() && event->type() == QEvent::Resize)
-            label_->setGeometry(table_->viewport()->rect());
-        return QObject::eventFilter(watched, event);
-    }
-
-private:
-    void update()
-    {
-        const bool empty = !table_->model() || table_->model()->rowCount() == 0;
-        label_->setGeometry(table_->viewport()->rect());
-        label_->setVisible(empty);
-    }
-
-    void restyle()
-    {
-        const ThemeManager &tm = ThemeManager::instance();
-        label_->setText(QStringLiteral("<div style='font-size:13px; font-weight:600; color:%1;'>尚无结果</div>"
-                                       "<div style='font-size:12px; color:%2;'>在左侧设置参数，然后点击“查询”</div>")
-                            .arg(tm.hex("t2"), tm.hex("t3")));
-    }
-
-    QTableView *table_;
-    QLabel *label_;
-};
-
 } // namespace
 
 Shell apply(const Parts &p, const QString &productCaption)
@@ -104,7 +56,7 @@ Shell apply(const Parts &p, const QString &productCaption)
     // ---- left panel
     auto *left = new QWidget;
     left->setObjectName("queryLeft");
-    left->setFixedWidth(416);
+    left->setFixedWidth(UiScale::dp(416));
     left->setAttribute(Qt::WA_StyledBackground, true);
     auto *ll = new QVBoxLayout(left);
     ll->setContentsMargins(20, 18, 20, 16);
@@ -197,7 +149,7 @@ Shell apply(const Parts &p, const QString &productCaption)
     p.table->horizontalHeader()->setStretchLastSection(true);
     p.table->horizontalHeader()->setHighlightSections(false);
     p.table->setShowGrid(false);
-    new EmptyOverlay(p.table);
+    FormKit::emptyStateFor(p.table, QStringLiteral("尚无结果"), QStringLiteral("在左侧设置参数，然后点击“查询”"));
     rl->addWidget(p.table, 1);
 
     auto *footer = new QHBoxLayout;

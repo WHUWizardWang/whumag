@@ -10,7 +10,7 @@ LogTextBrowser::LogTextBrowser(QWidget *parent) : QTextBrowser(parent)
     QFont mono;
     mono.setFamilies({QStringLiteral("Cascadia Mono"), QStringLiteral("Consolas"), QStringLiteral("Courier New")});
     mono.setStyleHint(QFont::Monospace);
-    mono.setPixelSize(12);
+    mono.setPointSizeF(9);
     setFont(mono);
     setOpenExternalLinks(false);
     document()->setDocumentMargin(6);

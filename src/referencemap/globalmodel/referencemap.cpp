@@ -1,6 +1,17 @@
 #include "referencemap.h"
 #include "ui_referencemap.h"
 
+#include "formkit.h"
+#include "resultpreviewpanel.h"
+#include "thememanager.h"
+#include "uiscale.h"
+#include "uiwidgets.h"
+
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QScrollArea>
+#include <QVBoxLayout>
+
 
 ReferenceMap::ReferenceMap(QWidget *parent) :
     QWidget(parent),
@@ -42,11 +53,140 @@ ReferenceMap::ReferenceMap(QWidget *parent) :
     ui->comboBox_data->addItems(nameList_real);
     // 初始化：保存文件名
 
+    buildLayout();
 }
 
 ReferenceMap::~ReferenceMap()
 {
     delete ui;
+}
+
+// Replaces the .ui layout: parameters (scrollable, the model forms can be long) in a left panel,
+// preview + log in a right panel.  Every widget the modelling code touches is kept.
+void ReferenceMap::buildLayout()
+{
+    setWindowTitle(tr("整图建模"));
+    resize(UiScale::windowSize(1180, 720));
+
+    // the mode radios stay alive (the existing slots and button group use them) but hidden
+    for (QWidget *w : {static_cast<QWidget *>(ui->radioButton_auto), static_cast<QWidget *>(ui->radioButton_self)})
+    {
+        w->setParent(this);
+        w->hide();
+    }
+
+    // ---- left: scrollable content + pinned run button
+    auto *content = new QWidget;
+    auto *ll = new QVBoxLayout(content);
+    ll->setContentsMargins(24, 20, 24, 12);
+    ll->setSpacing(14);
+    ll->addWidget(FormKit::header(QStringLiteral("grid"), tr("整图建模"), tr("对整块实测数据建立基准图")));
+
+    ll->addWidget(FormKit::stepHeading(1, tr("选择数据")));
+    ll->addLayout(FormKit::field(tr("实测数据"), ui->comboBox_data));
+
+    ll->addSpacing(4);
+    ll->addWidget(FormKit::stepHeading(2, tr("建图参数")));
+    auto *res = new QHBoxLayout;
+    res->setSpacing(12);
+    res->addLayout(FormKit::field(tr("插值分辨率 · 经度 (X)"), ui->doubleSpinBox_dx), 1);
+    res->addLayout(FormKit::field(tr("插值分辨率 · 纬度 (Y)"), ui->doubleSpinBox_dy), 1);
+    ll->addLayout(res);
+    ll->addLayout(FormKit::field(tr("抽稀参数 (km)"), ui->doubleSpinBox_sparse));
+
+    ll->addSpacing(4);
+    ll->addWidget(FormKit::stepHeading(3, tr("建模方法")));
+    ui->comboBox_model->setPlaceholderText(tr("请选择插值模型"));
+    ll->addLayout(FormKit::field(tr("插值模型"), ui->comboBox_model));
+
+    auto *mode = new SegmentedControl({tr("智能计算最优参数"), tr("自定义参数")});
+    mode->setCurrentIndex(ui->radioButton_self->isChecked() ? 1 : 0);
+    connect(mode, &SegmentedControl::currentChanged, this, [this](int index) {
+        (index == 0 ? ui->radioButton_auto : ui->radioButton_self)->click();   // click() also fires the button group
+    });
+    ll->addLayout(FormKit::field(tr("参数设置"), mode, tr("选择“自定义参数”后，才能修改下方的模型参数。")));
+    ll->addWidget(ui->widget_para);
+
+    ll->addSpacing(4);
+    ll->addWidget(FormKit::stepHeading(4, tr("保存结果")));
+    ui->pushButton_2->setText(tr("浏览…"));
+    auto *saveRow = new QHBoxLayout;
+    saveRow->setSpacing(8);
+    saveRow->addWidget(ui->lineEdit_savePath, 1);
+    saveRow->addWidget(ui->pushButton_2);
+    ll->addLayout(FormKit::field(tr("保存路径"), saveRow));
+    ll->addStretch(1);
+
+    auto *scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setWidget(content);
+    content->setAutoFillBackground(false);
+    scroll->viewport()->setAutoFillBackground(false);
+
+    leftPanel_ = new QWidget;
+    leftPanel_->setObjectName("refLeft");
+    leftPanel_->setFixedWidth(UiScale::dp(440));
+    leftPanel_->setAttribute(Qt::WA_StyledBackground, true);
+    auto *lp = new QVBoxLayout(leftPanel_);
+    lp->setContentsMargins(0, 0, 0, 0);
+    lp->setSpacing(0);
+    lp->addWidget(scroll, 1);
+
+    ui->pushButton->setText(tr("开始建模"));
+    FormKit::setRole(ui->pushButton, "primary");
+    ui->pushButton->setMinimumHeight(36);
+    ui->pushButton->setCursor(Qt::PointingHandCursor);
+    auto *footer = new QHBoxLayout;
+    footer->setContentsMargins(24, 10, 24, 18);
+    footer->addWidget(ui->pushButton, 1);
+    lp->addLayout(footer);
+
+    // ---- right: status, preview card and log
+    preview_ = new ResultPreviewPanel({ui->widget_pic0, ui->widget_pic1, ui->widget_pic2, ui->widget_pic3, ui->widget_pic4, ui->widget_pic5},
+                                      ui->textBrowser);
+
+    // ---- swap: old layout out, new one in (this re-parents every widget used above), then drop the old containers
+    auto *root = new QHBoxLayout;
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
+    root->addWidget(leftPanel_);
+    root->addWidget(preview_, 1);
+    delete layout();
+    setLayout(root);
+    delete ui->widget_data;
+    delete ui->widget_3;
+    delete ui->widget_2;
+    delete ui->widget_model;
+    delete ui->widget_4;
+    delete ui->widget;
+    delete ui->widget_confirm;
+    delete ui->line;
+    delete ui->line_2;
+
+    auto restyle = [this]() {
+        const ThemeManager &tm = ThemeManager::instance();
+        leftPanel_->setStyleSheet(QStringLiteral("#refLeft { background: %1; border: none; border-right: 1px solid %2; }"
+                                                 "#refLeft QScrollArea { background: transparent; }")
+                                      .arg(tm.hex("n1"), tm.hex("line")));
+    };
+    connect(&ThemeManager::instance(), &ThemeManager::themeChanged, this, restyle);
+    restyle();
+
+    // the model slot (connected by setupUi) shows / hides the six result containers; look again after it ran
+    connect(ui->comboBox_model, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() { preview_->refreshEmptyState(); });
+}
+
+void ReferenceMap::setBusy(bool busy)
+{
+    leftPanel_->setEnabled(!busy);
+    ui->pushButton->setText(busy ? tr("处理中…") : tr("开始建模"));
+    if (busy)
+        preview_->setStatus(tr("处理中…"), Chip::Accent);
+    else
+        preview_->setStatus(runOk_ ? tr("已完成") : tr("未完成"), runOk_ ? Chip::Ok : Chip::Neutral);
+    QCoreApplication::processEvents();
 }
 void ReferenceMap::on_radioButtonGroup_toggled(int id)
 {
@@ -187,6 +327,15 @@ void ReferenceMap::on_comboBox_model_currentIndexChanged(int index)
 
 void ReferenceMap::on_pushButton_clicked()
 {
+    runOk_ = false;
+    setBusy(true);
+    runModeling();
+    setBusy(false);
+    preview_->refreshEmptyState();
+}
+
+void ReferenceMap::runModeling()
+{
     sparse_para = this->ui->doubleSpinBox_sparse->value();
     dx = this->ui->doubleSpinBox_dx->value();
     dy = this->ui->doubleSpinBox_dy->value();
@@ -271,6 +420,7 @@ void ReferenceMap::on_pushButton_clicked()
 //        ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
         // 更新主界面的树
         emit treeUpdated(1);
+        runOk_ = true;
         //
         draw_Form *draw_form_ = new draw_Form;
         QVector<double> xx,yy,zz;
@@ -359,6 +509,7 @@ void ReferenceMap::on_pushButton_clicked()
         // ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
         //
         emit treeUpdated(1);
+        runOk_ = true;
         //
         draw_Form *draw_form_ = new draw_Form;
         QVector<double> xx,yy,zz;
@@ -499,6 +650,7 @@ void ReferenceMap::on_pushButton_clicked()
 
             // 更新树
             emit treeUpdated(1);
+        runOk_ = true;
 
             // 可视化结果
             ui->textBrowser->append("正在生成可视化结果...");
@@ -624,6 +776,7 @@ void ReferenceMap::on_pushButton_clicked()
         // ui->textBrowser->append("rms: "+QString::number(rms,'f',2));
         // 更新主界面的树
         emit treeUpdated(1);
+        runOk_ = true;
         break;
     }
     case 4: // compress
@@ -682,6 +835,7 @@ void ReferenceMap::on_pushButton_clicked()
         ui->widget_pic4->layout()->addWidget(draw_form_);
         // 更新主界面的树
         emit treeUpdated(1);
+        runOk_ = true;
         break;
     }
     case 5: // lssvmpso
@@ -745,6 +899,7 @@ void ReferenceMap::on_pushButton_clicked()
 
         // 更新主界面的树
         emit treeUpdated(1);
+        runOk_ = true;
         break;
     }
     default:
