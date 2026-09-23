@@ -30,6 +30,9 @@ if exist "%SRC%\resources\high_quality.rcc" (
     copy /y "%SRC%\resources\high_quality.rcc" "%DEST%\resources\" >nul
 )
 copy /y "%SRC%\deploy\*.dll" "%DEST%\" >nul 2>nul
-copy /y "%SRC%\resources\Map\offline_tiles\*.png" "%DEST%\offline_tiles\" >nul 2>nul
+REM offline map tiles: <zoom>\<x>\<y>.png tree.  Tiles of the old flat layout
+REM (osm-l-3-z-x-y.png) left in the destination by earlier builds are removed.
+del /q "%DEST%\offline_tiles\osm-l-*.png" >nul 2>nul
+xcopy "%SRC%\resources\Map\offline_tiles" "%DEST%\offline_tiles\" /e /i /y /q >nul 2>nul
 
 exit /b 0

@@ -32,6 +32,13 @@
 根据 `tools/ui_icons.json` 生成）、`uiwidgets` / `formkit` / `resultpreviewpanel`（各窗口共用的控件与布局块）、
 `uiscale.h`（随文字缩放的尺寸）。新增 `.cpp` / `.h` 后要写进 `whumag.pro`。
 
+### 离线地图
+
+主界面的地图只使用本地瓦片，不联网：瓦片放在 `resources/Map/offline_tiles/<缩放级别>/<x>/<y>.png`
+（标准 XYZ 瓦片目录，256×256 PNG），构建时由 `deploy_resources.bat` 复制到程序目录的 `offline_tiles`。
+地图能放大到的最大级别取自该目录中最大的缩放级别文件夹；没有瓦片的区域显示为空白。
+现有瓦片覆盖全球 0～5 级、中国及周边 6～8 级；需要更细或更大范围时，把对应级别的瓦片按同样的目录结构放进去即可。
+
 ### 界面自动化检查（可选）
 
 用 `qmake "DEFINES+=WHUMAG_UI_TEST"` 构建会带上测试钩子（`src/app/uitesthooks.cpp`）。运行时设置
