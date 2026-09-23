@@ -20,6 +20,8 @@ int inputPara_up(QDialog &dialog,double &h,bool &useBL,
     QDoubleSpinBox *spinboxY = new QDoubleSpinBox(&dialog);
     spinboxX->setDecimals(6);
     spinboxY->setDecimals(6);
+    spinboxX->setRange(0.000001, 1e6);
+    spinboxY->setRange(0.000001, 1e6);
     spinboxX->setValue(0.0045);
     spinboxY->setValue(0.0045);
     QHBoxLayout *gridLayout = new QHBoxLayout;
@@ -32,8 +34,8 @@ int inputPara_up(QDialog &dialog,double &h,bool &useBL,
 
     // 3. 延拓高度
     QDoubleSpinBox *spinboxH = new QDoubleSpinBox(&dialog);
-    spinboxH->setRange(0.0, 9999.0);
-    spinboxH->setDecimals(2);
+    spinboxH->setRange(0.0001, 9999.0);
+    spinboxH->setDecimals(4);
     spinboxH->setValue(0.5);
     QLabel *kmLabel = new QLabel("KM");
     QHBoxLayout *heightLayout = new QHBoxLayout;
@@ -42,9 +44,12 @@ int inputPara_up(QDialog &dialog,double &h,bool &useBL,
     form.addRow("延拓高度：", heightLayout);
 
     // 4. 是否使用 BL 坐标
-    QCheckBox *cbUseBL = new QCheckBox("使用 BL 坐标", &dialog);
+    QCheckBox *cbUseBL = new QCheckBox("使用 BL 坐标（经纬度，度）", &dialog);
     cbUseBL->setChecked(useBL);  // 如果有默认值
     form.addRow(cbUseBL);
+    auto updateUnit = [=]() { kmLabel->setText(cbUseBL->isChecked() ? "KM" : "与坐标同单位"); };
+    QObject::connect(cbUseBL, &QCheckBox::toggled, &dialog, updateUnit);
+    updateUnit();
 
     // 5. 输出文件名
     QLineEdit *fileNameEdit = new QLineEdit("up.txt", &dialog);
@@ -76,7 +81,7 @@ int inputPara_up(QDialog &dialog,double &h,bool &useBL,
 }
 int inputPara_down(QDialog &dialog,double &h,int &type,bool &useBL,
                     int &data_num,QStringList &data_name_list,int &data_index,QString &dir
-                    ,double &step_lon,double &step_lat)
+                    ,double &step_lon,double &step_lat,bool &autoParameter,double &parameter)
 {
     QFormLayout form(&dialog);
     dialog.setWindowTitle("向下延拓-输入参数: ");
@@ -86,43 +91,78 @@ int inputPara_down(QDialog &dialog,double &h,int &type,bool &useBL,
         comboBox->addItem(data_name_list[i]);
     }
     form.addRow("选择数据: ",comboBox);
-    // Value1
+    // grid spacing (degrees with BL coordinates, otherwise the unit of x / y)
     QLabel *label1 = new QLabel("经度/X") ;
     QDoubleSpinBox *spinbox1 = new QDoubleSpinBox(&dialog);
     QLabel *label2 = new QLabel("纬度/Y") ;
     QDoubleSpinBox *spinbox2 = new QDoubleSpinBox(&dialog);
-    spinbox1->setDecimals(6);
-    spinbox2->setDecimals(6);
-    spinbox1->setValue(0.0045);
-    spinbox2->setValue(0.0045);
+    for (QDoubleSpinBox *s : {spinbox1, spinbox2})
+    {
+        s->setDecimals(6);
+        s->setRange(0.000001, 1e6);
+        s->setValue(0.0045);
+    }
     QHBoxLayout *horizontalLayout = new QHBoxLayout();
     horizontalLayout->addWidget(label1);
     horizontalLayout->addWidget(spinbox1);
     horizontalLayout->addWidget(label2);
     horizontalLayout->addWidget(spinbox2);
     form.addRow("格网分辨率:    ", horizontalLayout);
-    // Value2
+    // height
     QDoubleSpinBox *spinbox3 = new QDoubleSpinBox(&dialog);
-    spinbox3->setRange(0.0,9999.0);
-    spinbox3->setDecimals(2);
+    spinbox3->setRange(0.0001,9999.0);
+    spinbox3->setDecimals(4);
     spinbox3->setValue(0.5);
-    QLabel *lineEdit = new QLabel("KM");
+    QLabel *unitLabel = new QLabel("KM");
     QHBoxLayout *horizontalLayout2 = new QHBoxLayout();
     horizontalLayout2->addWidget(spinbox3);
-    horizontalLayout2->addWidget(lineEdit);
+    horizontalLayout2->addWidget(unitLabel);
     form.addRow("延拓高度: ",horizontalLayout2);
-    // Value3
+    // operator
     QComboBox *comboBox1 = new QComboBox();
     comboBox1->addItem("Tikhonov正则化法");
     comboBox1->addItem("积分迭代法");
     comboBox1->addItem("Landweber迭代法");
     comboBox1->addItem("迭代Tikhonov正则化法");
     form.addRow("延拓因子:    ", comboBox1);
-    // #4
-    // 4. 是否使用 BL 坐标
-    QCheckBox *cbUseBL = new QCheckBox("使用 BL 坐标", &dialog);
-    cbUseBL->setChecked(useBL);  // 如果有默认值
+    // regularisation parameter: L-curve or manual
+    QComboBox *paramMode = new QComboBox();
+    paramMode->addItem("自动（L 曲线拐点）");
+    paramMode->addItem("手动指定");
+    QDoubleSpinBox *paramSpin = new QDoubleSpinBox(&dialog);
+    paramSpin->setDecimals(6);
+    QLabel *paramLabel = new QLabel;
+    QHBoxLayout *paramLayout = new QHBoxLayout();
+    paramLayout->addWidget(paramMode, 1);
+    paramLayout->addWidget(paramLabel);
+    paramLayout->addWidget(paramSpin, 1);
+    form.addRow("正则化参数: ", paramLayout);
+    QLabel *paramHint = new QLabel;
+    paramHint->setWordWrap(true);
+    paramHint->setStyleSheet("color: gray;");
+    form.addRow(QString(), paramHint);
+    auto updateParam = [=]() {
+        const bool iterations = comboBox1->currentIndex() == 1 || comboBox1->currentIndex() == 2;
+        paramLabel->setText(iterations ? "迭代次数 n" : "α");
+        paramSpin->setDecimals(iterations ? 0 : 6);
+        paramSpin->setRange(iterations ? 1 : 0.000001, iterations ? 100000 : 1000);
+        paramSpin->setValue(iterations ? 13 : 0.95);
+        const bool manual = paramMode->currentIndex() == 1;
+        paramSpin->setEnabled(manual);
+        paramLabel->setEnabled(manual);
+        paramHint->setText(manual ? "原程序固定使用 α = 0.95 / n = 13，通常过度平滑。"
+                                  : "在一组候选参数上计算 L 曲线，取曲率最大处（拐点）；结果窗口会显示 L 曲线。");
+    };
+    QObject::connect(comboBox1, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, updateParam);
+    QObject::connect(paramMode, QOverload<int>::of(&QComboBox::currentIndexChanged), &dialog, updateParam);
+    updateParam();
+    // coordinates
+    QCheckBox *cbUseBL = new QCheckBox("使用 BL 坐标（经纬度，度）", &dialog);
+    cbUseBL->setChecked(useBL);
     form.addRow(cbUseBL);
+    auto updateUnit = [=]() { unitLabel->setText(cbUseBL->isChecked() ? "KM" : "与坐标同单位"); };
+    QObject::connect(cbUseBL, &QCheckBox::toggled, &dialog, updateUnit);
+    updateUnit();
     QLineEdit *linEdit1 = new QLineEdit;
     linEdit1->setText("down.txt");
     form.addRow("保存文件名: ",linEdit1);
@@ -144,6 +184,8 @@ int inputPara_down(QDialog &dialog,double &h,int &type,bool &useBL,
         useBL = cbUseBL->isChecked();
         data_index = comboBox->currentIndex();
         dir = linEdit1->text();
+        autoParameter = paramMode->currentIndex() == 0;
+        parameter = paramSpin->value();
         return 0;
     }
     return -1;
@@ -164,10 +206,20 @@ int inputPara_correct(QDialog &dialog,QDate &date0,QDate &date1,int &useGeoid,do
     // #2
     QDateEdit *dateEdit0 = new QDateEdit();
     QDateEdit *dateEdit1 = new QDateEdit();
+    for (QDateEdit *d : {dateEdit0, dateEdit1})
+    {
+        d->setDateRange(QDate(1900, 1, 1), QDate(2030, 1, 1));   // IGRF-14
+        d->setDisplayFormat("yyyy-MM-dd");
+        d->setCalendarPopup(true);
+    }
     dateEdit0->setDate(QDate::currentDate().addDays(-360));
     dateEdit1->setDate(QDate::currentDate());
-    form.addRow("通化前时间: ", dateEdit0);
-    form.addRow("通化后时间: ", dateEdit1);
+    form.addRow("测量日期: ", dateEdit0);
+    form.addRow("通化到日期: ", dateEdit1);
+    QLabel *dateHint = new QLabel("通化后数值 = 实测值 + F_IGRF(通化到日期) − F_IGRF(测量日期)；IGRF-14 适用于 1900—2030 年。");
+    dateHint->setWordWrap(true);
+    dateHint->setStyleSheet("color: gray;");
+    form.addRow(QString(), dateHint);
     // #3
     QComboBox *comboBox1 = new QComboBox;
     comboBox1->addItem("IGRF");
@@ -178,10 +230,11 @@ int inputPara_correct(QDialog &dialog,QDate &date0,QDate &date1,int &useGeoid,do
     form.addRow("保存文件名: ",linEdit);
     // #5
     QComboBox *comboBox2 = new QComboBox;
-    comboBox2->addItem("E");
-    comboBox2->addItem("M");
+    comboBox2->addItem("E（椭球高）");
+    comboBox2->addItem("M（海拔高）");
     QDoubleSpinBox *spinbox1 = new QDoubleSpinBox(&dialog);
-    spinbox1->setRange(0.0,9999.0);
+    spinbox1->setRange(-10.0,9999.0);
+    spinbox1->setDecimals(3);
     spinbox1->setValue(0.5);
     QLabel *lineEdit = new QLabel("KM");
     QHBoxLayout *horizontalLayout = new QHBoxLayout();
@@ -202,8 +255,8 @@ int inputPara_correct(QDialog &dialog,QDate &date0,QDate &date1,int &useGeoid,do
         date1 = dateEdit1->date();
         if (comboBox->count()==0)
             return -1;
-        useGeoid = comboBox1->currentIndex();
-        height = spinbox1->value()*1000;
+        useGeoid = comboBox2->currentIndex();   // E = above the ellipsoid, M = above mean sea level
+        height = spinbox1->value();             // km (the IGRF routine takes km)
         data_index = comboBox->currentIndex();
         dir = linEdit->text();
         return 0;

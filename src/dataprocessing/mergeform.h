@@ -1,6 +1,7 @@
 #ifndef MERGEFORM_H
 #define MERGEFORM_H
 
+#include <QCheckBox>
 #include <QWidget>
 #include <QStandardItemModel>
 #include <QFileDialog>
@@ -8,7 +9,7 @@
 #include <QList>
 #include <QHeaderView>
 #include <QAbstractItemModel>
-#include "merge.h"
+#include "fusion.h"
 #include "draw/draw_form.h"
 
 namespace Ui {
@@ -21,13 +22,9 @@ class mergeForm : public QWidget
 
 public:
     explicit mergeForm(QWidget *parent = nullptr);
-    void readTable();
-    QString filepath;       // 文件路径
-    QString filename;       // 文件名
-    int filecount;          // 文件数
-
-    rongHe myMerge;
     ~mergeForm();
+
+    QString filepath;   // project directory: a bare output file name is saved to its Processed folder
 
 private slots:
     void on_chooseFiles_clicked();
@@ -41,6 +38,12 @@ signals:
 
 private:
     void buildLayout();
+    bool readJob(Proc::FusionJob &job);
+    void showResult(const Proc::FusionJob &job);
+
+    QCheckBox *removeBias_ = nullptr;
+    QCheckBox *rejectOutliers_ = nullptr;
+    bool running_ = false;
 
     Ui::mergeForm *ui;
 

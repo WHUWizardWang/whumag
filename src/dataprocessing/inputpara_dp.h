@@ -22,9 +22,11 @@ int inputPara_up(QDialog &dialog,double &h,bool &useBL,
                   int &data_num,QStringList &data_name_list,int &data_index,QString &dir,
                   double &step_x,double &step_y);
 
+// autoParameter: choose the regularisation parameter at the L-curve corner; otherwise |parameter|
+// (alpha, or the number of iterations for the iterative operators)
 int inputPara_down(QDialog &dialog,double &h,int &type,bool &useBL,
                     int &data_num,QStringList &data_name_list,int &data_index,QString &dir,
-                    double &step_x,double &step_y);
+                    double &step_x,double &step_y,bool &autoParameter,double &parameter);
 
 int inputPara_correct(QDialog &dialog,QDate &date0,QDate &date1,int &useGeoid,double &height,
                       int &data_num,QStringList &data_name_list,int &data_index,QString &dir);

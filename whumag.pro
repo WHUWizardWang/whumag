@@ -74,11 +74,13 @@ SOURCES += \
     src/app/contourplotter.cpp \
     src/database/database.cpp \
     src/dataprocessing/MagneticComplexityAnalyzer.cpp \
-    src/dataprocessing/Time_TongHua.cpp \
+    src/dataprocessing/timecorrection.cpp \
     src/dataprocessing/accuracy.cpp \
-    src/dataprocessing/extension.cpp \
+    src/dataprocessing/continuation.cpp \
+    src/dataprocessing/lcurveplot.cpp \
+    src/dataprocessing/procgrid.cpp \
     src/dataprocessing/inputpara_dp.cpp \
-    src/dataprocessing/merge.cpp \
+    src/dataprocessing/fusion.cpp \
     src/dataprocessing/mergeform.cpp \
     src/draw/draw_form.cpp \
     src/app/geomagnetismproject.cpp \
@@ -174,11 +176,13 @@ HEADERS += \
     src/database/database.h \
     src/database/databasemanager.h \
     src/dataprocessing/MagneticComplexityAnalyzer.h \
-    src/dataprocessing/Time_TongHua.h \
+    src/dataprocessing/timecorrection.h \
     src/dataprocessing/accuracy.h \
-    src/dataprocessing/extension.h \
+    src/dataprocessing/continuation.h \
+    src/dataprocessing/lcurveplot.h \
+    src/dataprocessing/procgrid.h \
     src/dataprocessing/inputpara_dp.h \
-    src/dataprocessing/merge.h \
+    src/dataprocessing/fusion.h \
     src/dataprocessing/mergeform.h \
     src/draw/draw_form.h \
     third_party/qcustomplot/qcustomplot.h \

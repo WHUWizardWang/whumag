@@ -10,6 +10,12 @@
 #include <QRadioButton>
 #include <QTreeWidget>
 #include "MagAno/anoqueryform.h"
+#include "dataprocessing/continuation.h"
+#include "dataprocessing/lcurveplot.h"
+#include <QStandardItemModel>
+#include <QTabWidget>
+#include <QTableView>
+#include <QVBoxLayout>
 #include "dataquerydialog.h"
 #include "logtextbrowser.h"
 #include "navigation/navigationform.h"
@@ -157,6 +163,50 @@ void uiTestScheduleForMainWindow(QWidget *mainWindow)
                             spin->setValue(qEnvironmentVariable(s.second).toDouble());
                 form->show();
                 form->startMatching();
+            }
+        });
+    }
+    // WHUMAG_TEST_LCURVE=<x y value file> runs a downward continuation with the L-curve
+    //   (WHUMAG_TEST_LCURVE_H height, _STEP grid step, _METHOD 0..3) and shows the L-curve plot
+    const QString lcurveFile = qEnvironmentVariable("WHUMAG_TEST_LCURVE");
+    if (!lcurveFile.isEmpty()) {
+        QTimer::singleShot(700, mainWindow, [lcurveFile]() {
+            Proc::ContinuationJob job;
+            job.kind = Proc::ContinuationKind::Downward;
+            job.inputFile = lcurveFile;
+            job.outputFile = QDir::temp().filePath(QStringLiteral("whumag_lcurve_test.txt"));
+            job.dx = job.dy = qEnvironmentVariable("WHUMAG_TEST_LCURVE_STEP", QStringLiteral("0.5")).toDouble();
+            job.height = qEnvironmentVariable("WHUMAG_TEST_LCURVE_H", QStringLiteral("1")).toDouble();
+            job.downward.method = Proc::DownwardMethod(qEnvironmentVariableIntValue("WHUMAG_TEST_LCURVE_METHOD"));
+            const Proc::ContinuationOutcome out = Proc::runContinuation(job);
+            auto *tabs = new QTabWidget;
+            tabs->setAttribute(Qt::WA_DeleteOnClose);
+            auto *page = new QWidget(tabs);
+            auto *layout = new QVBoxLayout(page);
+            layout->addWidget(createLCurvePlot(out.lcurve, page));
+            tabs->addTab(page, QStringLiteral("L 曲线"));
+            tabs->setWindowTitle(QStringLiteral("向下延拓"));
+            tabs->resize(900, 620);
+            tabs->show();
+        });
+    }
+    // WHUMAG_TEST_MERGE=file1|sigma1,file2|sigma2 fills the file table of the data-fusion form
+    const QStringList mergeRows = qEnvironmentVariable("WHUMAG_TEST_MERGE").split(',', Qt::SkipEmptyParts);
+    if (!mergeRows.isEmpty()) {
+        QTimer::singleShot(800, mainWindow, [mergeRows]() {
+            for (QWidget *w : QApplication::allWidgets()) {
+                if (!w->isWindow() || QString::fromLatin1(w->metaObject()->className()) != QLatin1String("mergeForm"))
+                    continue;
+                auto *table = w->findChild<QTableView *>();
+                auto *model = table ? qobject_cast<QStandardItemModel *>(table->model()) : nullptr;
+                if (!model)
+                    continue;
+                model->setRowCount(mergeRows.size());
+                for (int i = 0; i < mergeRows.size(); ++i) {
+                    const QStringList parts = mergeRows[i].split('|');
+                    model->setItem(i, 0, new QStandardItem(parts.value(0)));
+                    model->setItem(i, 1, new QStandardItem(parts.value(1)));
+                }
             }
         });
     }

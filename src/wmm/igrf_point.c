@@ -397,7 +397,7 @@ int omg_igrf(MAGtype_CoordGeodetic *CoordGeodeticArr,
         {
             printf("Corrupt record in file %s on line %d.\n", mdfile, fileline);
             fclose(stream);
-            exit(5);
+            return -1;   /* was exit(5), which ended the whole application */
         }
 
         /* old statement Dec 1999 */
@@ -411,7 +411,7 @@ int omg_igrf(MAGtype_CoordGeodetic *CoordGeodeticArr,
             {
                 printf("Too many models in file %s on line %d.", mdfile, fileline);
                 fclose(stream);
-                exit(6);
+                return -1;   /* was exit(6) */
             }
 
             irec_pos[modelI] = ftell(stream);
@@ -445,6 +445,9 @@ int omg_igrf(MAGtype_CoordGeodetic *CoordGeodeticArr,
     nmodel = modelI + 1;
     fclose(stream);
 
+    int cachedModel = -1;        /* model / date whose coefficients are in gha, ghb */
+    double cachedDate = -1e30;
+
     for (int index = 0; index < length; ++index)
     {
         MAGtype_CoordGeodetic CoordGeodetic = CoordGeodeticArr[index];
@@ -477,21 +480,29 @@ int omg_igrf(MAGtype_CoordGeodetic *CoordGeodeticArr,
 
         /** This will compute everything needed for 1 point in time. **/
 
-        if (max2[modelI] == 0)
+        /* The coefficients depend only on the model and the date, and loading them means re-reading
+         * the coefficient file, so they are loaded again only when one of the two changes (all the
+         * points of a batch usually share one date). */
+        if (modelI != cachedModel || sdate != cachedDate)
         {
-            getshc_interp(mdfile, 1, irec_pos[modelI], max1[modelI], 1);
-            getshc_interp(mdfile, 1, irec_pos[modelI + 1], max1[modelI + 1], 2);
-            nmax_main = interpsh(sdate, yrmin[modelI], max1[modelI],
-                            yrmin[modelI + 1], max1[modelI + 1], 3);
-            nmax_sv = interpsh(sdate + 1, yrmin[modelI], max1[modelI],
-                            yrmin[modelI + 1], max1[modelI + 1], 4);
-        }
-        else
-        {
-            getshc(mdfile, 1, irec_pos[modelI], max1[modelI], 1);
-            getshc(mdfile, 0, irec_pos[modelI], max2[modelI], 2);
-            nmax_main = extrapsh(sdate, epoch[modelI], max1[modelI], max2[modelI], 3);
-            nmax_sv = extrapsh(sdate + 1, epoch[modelI], max1[modelI], max2[modelI], 4);
+            if (max2[modelI] == 0)
+            {
+                getshc_interp(mdfile, 1, irec_pos[modelI], max1[modelI], 1);
+                getshc_interp(mdfile, 1, irec_pos[modelI + 1], max1[modelI + 1], 2);
+                nmax_main = interpsh(sdate, yrmin[modelI], max1[modelI],
+                                yrmin[modelI + 1], max1[modelI + 1], 3);
+                nmax_sv = interpsh(sdate + 1, yrmin[modelI], max1[modelI],
+                                yrmin[modelI + 1], max1[modelI + 1], 4);
+            }
+            else
+            {
+                getshc(mdfile, 1, irec_pos[modelI], max1[modelI], 1);
+                getshc(mdfile, 0, irec_pos[modelI], max2[modelI], 2);
+                nmax_main = extrapsh(sdate, epoch[modelI], max1[modelI], max2[modelI], 3);
+                nmax_sv = extrapsh(sdate + 1, epoch[modelI], max1[modelI], max2[modelI], 4);
+            }
+            cachedModel = modelI;
+            cachedDate = sdate;
         }
 
         igdgc = 1;

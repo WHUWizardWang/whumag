@@ -1,5 +1,6 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "dataprocessing/lcurveplot.h"
 #include "dataquerydialog.h"
 #include "explorerpanel.h"
 #include "welcomepage.h"
@@ -696,473 +697,144 @@ double MainWindow::calculateRMS(const Geomagnetic::Datapoint &datapoints, const 
     return std::sqrt(sumSquaredError / count);
 }
 
+// Runs a continuation job in the background and shows the result (before / after, and the L-curve
+// for downward continuation).  Shared by 向上延拓, 向下延拓 and 延拓精度评估.
+void MainWindow::startContinuation(const Proc::ContinuationJob &job, const QString &title)
+{
+    const QString inputName = QFileInfo(job.inputFile).fileName();
+    ui->textBrowser->append(QStringLiteral("%1开始：%2").arg(title, inputName));
+    const QString taskName = QStringLiteral("%1: %2").arg(title, inputName);
+    QListWidgetItem *item = new QListWidgetItem(taskName + " （进行中…）");
+    taskList->addItem(item);
+
+    auto *watcher = new QFutureWatcher<Proc::ContinuationOutcome>(this);
+    connect(watcher, &QFutureWatcher<Proc::ContinuationOutcome>::finished, this, [=]() {
+        const Proc::ContinuationOutcome out = watcher->result();
+        watcher->deleteLater();
+        if (closing_)
+            return;
+        for (const QString &line : out.log)
+            ui->textBrowser->append(QStringLiteral("  ") + line);
+        if (!out.ok()) {
+            ui->textBrowser->append(QStringLiteral("错误: %1失败：%2").arg(title, out.error));
+            item->setText(taskName + " （处理失败）");
+            return;
+        }
+        item->setText(taskName + " （已完成）");
+        ui->textBrowser->append(QStringLiteral("%1完成！").arg(title));
+
+        auto *tabs = new QTabWidget;
+        tabs->setAttribute(Qt::WA_DeleteOnClose);
+        auto addMap = [tabs](const QString &file, const QString &name) {
+            auto *page = new QWidget(tabs);
+            auto *layout = new QVBoxLayout(page);
+            auto *form = new draw_Form(page);
+            QVector<double> xx, yy, zz;
+            form->create_xyz_f(file, xx, yy, zz);
+            if (!xx.isEmpty()) {
+                form->autoset_heatMapView(xx, yy, zz);
+                if (form->magWarn)
+                    form->autoset_contourView(xx, yy, zz);
+            }
+            layout->addWidget(form);
+            tabs->addTab(page, name);
+        };
+        addMap(job.inputFile, QStringLiteral("延拓前"));
+        addMap(job.outputFile, job.kind == Proc::ContinuationKind::RoundTrip ? QStringLiteral("延拓回原高度") : QStringLiteral("延拓后"));
+        if (!out.lcurve.isEmpty()) {
+            auto *page = new QWidget(tabs);
+            auto *layout = new QVBoxLayout(page);
+            layout->addWidget(createLCurvePlot(out.lcurve, page));
+            tabs->addTab(page, QStringLiteral("L 曲线"));
+        }
+        tabs->setWindowTitle(title);
+        tabs->resize(1100, 700);
+        tabs->show();
+        ProjectChanged_processed();
+    });
+    watcher->setFuture(QtConcurrent::run([job]() { return Proc::runContinuation(job); }));
+}
+
+// Output path in the project's Processed folder (".txt" added when there is no extension).
+QString MainWindow::processedOutputPath(const QString &fileName) const
+{
+    const QString outDir = geomag_proj_->Path() + "/Processed/";
+    QDir().mkpath(outDir);
+    QString path = outDir + fileName.trimmed();
+    if (QFileInfo(path).suffix().isEmpty())
+        path += ".txt";
+    return path;
+}
+
 void MainWindow::on_action_up_triggered()
 {
-    try {
-        // 1. 获取输入参数
-        double step_x_deg, step_y_deg, h;
-        Datapoint datapoints;
-        bool useBL;
-        int data_index;
-        QString subDir;
-        QDialog dialog(this);
+    double step_x, step_y, h;
+    bool useBL = false;
+    int data_index;
+    QString outName;
+    QDialog dialog(this);
+    if (inputPara_up(dialog, h, useBL, data_num, geomag_proj_->nameList_real, data_index, outName, step_x, step_y) == -1)
+        return;
 
-        int ret = inputPara_up(
-            dialog,
-            h,
-            useBL,
-            data_num,
-            geomag_proj_->nameList_real,
-            data_index,
-            subDir,
-            step_x_deg,
-            step_y_deg
-            );
-
-        if (ret == -1)
-            return;
-
-        // 2. 构造文件路径
-        const QString inputFileName = geomag_proj_->nameList_real[data_index];
-        const QString inputFilePath = geomag_proj_->Path() + "/Measured/" + inputFileName;
-        const QString outDir = geomag_proj_->Path() + "/Processed/";
-        QDir().mkpath(outDir);
-
-        // 确保输出文件名有正确的扩展名
-        QString outputFilePath = outDir + subDir;
-        if (!outputFilePath.endsWith(".txt") && !outputFilePath.endsWith(".dat")) {
-            outputFilePath += ".txt";
-        }
-
-        qDebug() << "=== 向上延拓处理参数 ===";
-        qDebug() << "输入文件:" << inputFilePath;
-        qDebug() << "输出文件:" << outputFilePath;
-        qDebug() << "使用BL:" << useBL;
-        qDebug() << "步长:" << step_x_deg << "," << step_y_deg;
-        qDebug() << "高度:" << h;
-
-        ui->textBrowser->append("向上延拓处理开始...");
-        ui->textBrowser->append(QString("输出文件: %1").arg(outputFilePath));
-        QCoreApplication::processEvents();
-
-        // 验证输入文件
-        if (!QFile::exists(inputFilePath)) {
-            ui->textBrowser->append("错误: 输入文件不存在");
-            return;
-        }
-
-        // 先同步读入数据
-        ReadData readdata;
-        readdata.readGridFromFile(inputFilePath.toStdString(), datapoints);
-
-        if (datapoints.empty()) {
-            ui->textBrowser->append("错误: 输入数据为空");
-            return;
-        }
-
-        qDebug() << "读取数据点数:" << datapoints.size();
-
-        // 3. 创建任务项
-        QString taskName = QString("向上延拓: %1").arg(inputFileName);
-        QListWidgetItem *item = new QListWidgetItem(taskName + " （进行中…）");
-        taskList->addItem(item);
-
-        // 4. 创建线程安全的数据拷贝
-        auto datapointsCopy = std::make_shared<Datapoint>(datapoints);
-
-        // 5. 使用 QtConcurrent::run 执行后台任务
-        auto future = QtConcurrent::run([=]() -> bool {
-            try {
-                qDebug() << "后台线程开始处理...";
-
-                yanTuo yantuo;
-
-                // 使用拷贝的数据
-                Datapoint localDatapoints = *datapointsCopy;
-
-                if (useBL) {
-                    yantuo.up_run_BL(localDatapoints,
-                                     step_x_deg,
-                                     step_y_deg,
-                                     h,
-                                     outputFilePath.toStdString());
-                } else {
-                    yantuo.up_run(localDatapoints,
-                                  step_x_deg,
-                                  step_y_deg,
-                                  h,
-                                  outputFilePath.toStdString());
-                }
-
-                // 验证输出文件是否成功创建
-                if (!QFile::exists(outputFilePath)) {
-                    qWarning() << "输出文件创建失败:" << outputFilePath;
-                    return false;
-                }
-
-                QFileInfo outputInfo(outputFilePath);
-                if (outputInfo.size() == 0) {
-                    qWarning() << "输出文件为空:" << outputFilePath;
-                    return false;
-                }
-
-                qDebug() << "后台处理完成，输出文件大小:" << outputInfo.size() << "字节";
-                return true;
-
-            } catch (const std::exception& e) {
-                qCritical() << "后台处理异常:" << e.what();
-                return false;
-            } catch (...) {
-                qCritical() << "后台处理未知异常";
-                return false;
-            }
-        });
-
-        // 6. 监控任务完成
-        QFutureWatcher<bool>* watcher = new QFutureWatcher<bool>(this);
-        watcher->setFuture(future);
-
-        connect(watcher, &QFutureWatcher<bool>::finished, this, [=]() {
-            try {
-                bool success = future.result();
-
-                if (!success) {
-                    ui->textBrowser->append("向上延拓处理失败！");
-                    item->setText(taskName + " （处理失败）");
-                    watcher->deleteLater();
-                    return;
-                }
-
-                ui->textBrowser->append("向上延拓处理完成！");
-                item->setText(taskName + " （已完成）");
-                QCoreApplication::processEvents();
-
-                // 验证文件存在后再创建图表
-                if (!QFile::exists(outputFilePath)) {
-                    ui->textBrowser->append("错误: 输出文件不存在，无法显示结果");
-                    watcher->deleteLater();
-                    return;
-                }
-
-                // 7. 创建标签页并绘图
-                QTabWidget *tabWidget = new QTabWidget();
-
-                // —— 延拓前 ——
-                {
-                    QWidget *tab1 = new QWidget(tabWidget);
-                    QVBoxLayout *layout1 = new QVBoxLayout(tab1);
-                    draw_Form *draw_form1 = new draw_Form(tab1);
-
-                    QVector<double> xx1, yy1, zz1;
-                    for (const auto& elem : datapoints) {
-                        xx1.push_back(elem.second.X);
-                        yy1.push_back(elem.second.Y);
-                        zz1.push_back(elem.second.tMagnetic);
-                    }
-
-                    if (!xx1.isEmpty()) {
-                        draw_form1->autoset_heatMapView(xx1, yy1, zz1);
-                        if (draw_form1->magWarn) {
-                            draw_form1->autoset_contourView(xx1, yy1, zz1);
-                        }
-                    }
-
-                    layout1->addWidget(draw_form1);
-                    tabWidget->addTab(tab1, QStringLiteral("延拓前"));
-                }
-
-                // —— 延拓后 ——
-                {
-                    QWidget *tab2 = new QWidget(tabWidget);
-                    QVBoxLayout *layout2 = new QVBoxLayout(tab2);
-                    draw_Form *draw_form2 = new draw_Form(tab2);
-
-                    try {
-                        QVector<double> xx2, yy2, zz2;
-                        draw_form2->create_xyz_f(outputFilePath, xx2, yy2, zz2);
-
-                        if (!xx2.isEmpty()) {
-                            draw_form2->autoset_heatMapView(xx2, yy2, zz2);
-                            if (draw_form2->magWarn) {
-                                draw_form2->autoset_contourView(xx2, yy2, zz2);
-                            }
-                        } else {
-                            ui->textBrowser->append("警告: 延拓后数据为空");
-                        }
-                    } catch (const std::exception& e) {
-                        ui->textBrowser->append(QString("延拓后数据读取失败: %1").arg(e.what()));
-                    }
-
-                    layout2->addWidget(draw_form2);
-                    tabWidget->addTab(tab2, QStringLiteral("延拓后"));
-                }
-
-                tabWidget->setWindowTitle(QStringLiteral("向上延拓"));
-                tabWidget->resize(1100, 700);
-                tabWidget->show();
-
-                ProjectChanged_processed();
-
-            } catch (const std::exception& e) {
-                ui->textBrowser->append(QString("结果显示失败: %1").arg(e.what()));
-            }
-
-            watcher->deleteLater();
-        });
-
-    } catch (const std::exception& e) {
-        ui->textBrowser->append(QString("向上延拓初始化失败: %1").arg(e.what()));
-    } catch (...) {
-        ui->textBrowser->append("向上延拓初始化失败: 未知错误");
-    }
+    Proc::ContinuationJob job;
+    job.kind = Proc::ContinuationKind::Upward;
+    job.inputFile = geomag_proj_->Path() + "/Measured/" + geomag_proj_->nameList_real[data_index];
+    job.outputFile = processedOutputPath(outName);
+    job.geographic = useBL;
+    job.dx = step_x;
+    job.dy = step_y;
+    job.height = h;
+    startContinuation(job, QStringLiteral("向上延拓"));
 }
 
 void MainWindow::on_action_down_triggered()
 {
-    /************* 1. 收集输入参数（保持原逻辑） *************/
-    double step_x, step_y, h;
-    int    data_index;
-    int    type;
-    bool   useBL;
-    QString subDir;
+    double step_x, step_y, h, parameter;
+    int data_index, type;
+    bool useBL = false, autoParameter = true;
+    QString outName;
     QDialog dialog(this);
+    if (inputPara_down(dialog, h, type, useBL, data_num, geomag_proj_->nameList_real, data_index, outName,
+                       step_x, step_y, autoParameter, parameter) == -1)
+        return;
 
-    int ret = inputPara_down(dialog, h, type, useBL,
-                             data_num, geomag_proj_->nameList_real,
-                             data_index, subDir,
-                             step_x, step_y);
-    if (ret == -1) return;
-
-    /************* 2. 组装路径 *************/
-    const QString inputFileName  = geomag_proj_->nameList_real[data_index];
-    const QString inputFilePath  = geomag_proj_->Path() + "/Measured/"  + inputFileName;
-    const QString outDir         = geomag_proj_->Path() + "/Processed/";
-    QDir().mkpath(outDir);                       // 确保目录存在
-    const QString outputFilePath = outDir + subDir;
-
-    ui->textBrowser->append("向下延拓处理开始（后台线程）...");
-    QString taskName = QString("向下延拓: %1").arg(inputFileName);
-    QListWidgetItem *item = new QListWidgetItem(taskName + " （进行中…）");
-    taskList->addItem(item);
-    QCoreApplication::processEvents();
-
-    /************* 3. 创建 QFutureWatcher *************/
-    // 返回值用 std::optional<QString> 保存潜在的错误信息；空 => 成功
-    using TaskResult = std::optional<QString>;
-    auto *watcher = new QFutureWatcher<TaskResult>(this);
-
-
-    /************* 4. 启动后台任务 *************/
-    QFuture<TaskResult> future = QtConcurrent::run([=]() -> TaskResult {
-        try {
-            /* 4.1 读取数据 */
-            ReadData   readfile;
-            Datapoint  datapoints;
-            if (!readfile.readGridFromFile(inputFilePath.toStdString(), datapoints))
-                return QStringLiteral("读取原始数据失败！");
-
-            /* 4.2 延拓计算 */
-            yanTuo yantuo;
-            if (useBL) {
-                yantuo.down_run_BL(datapoints,
-                                   step_x, step_y,
-                                   h,
-                                   outputFilePath.toStdString(),
-                                   type + 1);
-            } else {
-                yantuo.down_run(datapoints,
-                                step_x, step_y,
-                                h,
-                                outputFilePath.toStdString(),
-                                type + 1);
-            }
-            return std::nullopt;        // 成功
-        } catch (std::exception &e) {   // 捕获所有 C++ 异常
-            return QString::fromLocal8Bit(e.what());
-        }
-    });
-
-    watcher->setFuture(future);
-
-    /************* 5. 任务完成后回到 UI 线程 *************/
-    connect(watcher, &QFutureWatcher<TaskResult>::finished,
-            this, [=]() {
-                TaskResult err = watcher->future().result();
-
-                watcher->deleteLater();         // 释放 watcher
-
-                if (err) {                      // 任务失败
-                    ui->textBrowser->append("向下延拓失败: " + *err);
-                    item->setText(taskName + " （处理失败）");
-                    return;
-                }
-
-                ui->textBrowser->append("向下延拓处理完成！");
-                item->setText(taskName + " （已完成）");
-                QCoreApplication::processEvents();
-                /***** 5.1 绘图与界面更新（必须在 GUI 线程执行） *****/
-                QTabWidget *tabWidget = new QTabWidget();
-
-                // —— 延拓前
-                {
-                    QWidget *tab1 = new QWidget(tabWidget);
-                    QVBoxLayout *layout1 = new QVBoxLayout(tab1);
-                    auto *draw_form1 = new draw_Form(tab1);
-                    QVector<double> xx1, yy1, zz1;
-                    draw_form1->create_xyz_f(inputFilePath, xx1, yy1, zz1);
-                    draw_form1->autoset_heatMapView(xx1, yy1, zz1);
-                    if (draw_form1->magWarn)
-                        draw_form1->autoset_contourView(xx1, yy1, zz1);
-                    layout1->addWidget(draw_form1);
-                    tabWidget->addTab(tab1, QStringLiteral("延拓前"));
-                }
-
-                // —— 延拓后
-                {
-                    QWidget *tab2 = new QWidget(tabWidget);
-                    QVBoxLayout *layout2 = new QVBoxLayout(tab2);
-                    auto *draw_form2 = new draw_Form(tab2);
-                    QVector<double> xx2, yy2, zz2;
-                    draw_form2->create_xyz_f(outputFilePath, xx2, yy2, zz2);
-                    draw_form2->autoset_heatMapView(xx2, yy2, zz2);
-                    if (draw_form2->magWarn)
-                        draw_form2->autoset_contourView(xx2, yy2, zz2);
-                    layout2->addWidget(draw_form2);
-                    tabWidget->addTab(tab2, QStringLiteral("延拓后"));
-                }
-
-                tabWidget->setWindowTitle(QStringLiteral("向下延拓"));
-                tabWidget->resize(1100, 700);
-                tabWidget->show();
-
-                ProjectChanged_processed();
-                ui->textBrowser->append("向下延拓处理完成！");
-            });
+    Proc::ContinuationJob job;
+    job.kind = Proc::ContinuationKind::Downward;
+    job.inputFile = geomag_proj_->Path() + "/Measured/" + geomag_proj_->nameList_real[data_index];
+    job.outputFile = processedOutputPath(outName);
+    job.geographic = useBL;
+    job.dx = step_x;
+    job.dy = step_y;
+    job.height = h;
+    job.downward.method = Proc::DownwardMethod(type);
+    job.downward.autoParameter = autoParameter;
+    job.downward.parameter = parameter;
+    startContinuation(job, QStringLiteral("向下延拓"));
 }
 
 void MainWindow::on_action_evaluate_triggered()
 {
-    /************* 1. 收集参数（与原逻辑相同） *************/
-    double step_x, step_y, h;
-    int    data_index;
-    int    type;
-    bool   useBL;
-    QString subDir;
+    double step_x, step_y, h, parameter;
+    int data_index, type;
+    bool useBL = false, autoParameter = true;
+    QString outName;
     QDialog dialog(this);
+    if (inputPara_down(dialog, h, type, useBL, data_num, geomag_proj_->nameList_real, data_index, outName,
+                       step_x, step_y, autoParameter, parameter) == -1)
+        return;
 
-    int ret = inputPara_down(dialog, h, type, useBL,
-                             data_num, geomag_proj_->nameList_real,
-                             data_index, subDir,
-                             step_x, step_y);
-    if (ret == -1) return;
-
-    /************* 2. 组装路径 *************/
-    const QString inputFileName  = geomag_proj_->nameList_real[data_index];
-    const QString inputFilePath  = geomag_proj_->Path() + "/Measured/"  + inputFileName;
-    const QString outDir         = geomag_proj_->Path() + "/Processed/";
-    QDir().mkpath(outDir);
-    const QString outputFilePath = outDir + subDir;
-
-    ui->textBrowser->append("延拓精度检验开始（后台线程）...");
-    QCoreApplication::processEvents();
-
-    /************* 3. 创建 QFutureWatcher *************/
-    struct EvalResult {
-        std::optional<QString>  error;     // 有错误则存错误信息
-        QString                 yantuoOut; // 评估报告
-    };
-
-    auto *watcher = new QFutureWatcher<EvalResult>(this);
-    QString taskName = QString("延拓精度评估: %1").arg(inputFileName);
-    QListWidgetItem *item = new QListWidgetItem(taskName + " （进行中…）");
-    taskList->addItem(item);
-    QCoreApplication::processEvents();
-    /************* 4. 启动后台任务 *************/
-    QFuture<EvalResult> future = QtConcurrent::run([=]() -> EvalResult {
-        EvalResult res;
-
-        try {
-            /* 4.1 读取数据 */
-            ReadData  reader;
-            Datapoint datapoints;
-            if (!reader.readGridFromFile(inputFilePath.toStdString(), datapoints)) {
-                res.error = QStringLiteral("读取原始数据失败！");
-                return res;
-            }
-
-            /* 4.2 精度评估 */
-            yanTuo yantuo;
-            yantuo.evaluatePrecision(datapoints,
-                                     useBL,
-                                     step_x, step_y,
-                                     h,
-                                     type + 1,
-                                     outputFilePath.toStdString());
-
-            res.yantuoOut = yantuo.out;
-            return res;                // 成功
-        } catch (std::exception &e) {
-            res.error = QString::fromLocal8Bit(e.what());
-            return res;
-        }
-    });
-
-    watcher->setFuture(future);
-
-    /************* 5. 完成后回到 UI 线程 *************/
-    connect(watcher, &QFutureWatcher<EvalResult>::finished,
-            this, [=]() {
-                EvalResult r = watcher->future().result();
-                watcher->deleteLater();
-
-                if (r.error) {                         // 评估失败
-                    ui->textBrowser->append("延拓精度检验失败: " + *r.error);
-                    item->setText(taskName + " （处理失败）");
-                    return;
-                }
-
-                /***** 5.1 显示评估报告 *****/
-                item->setText(taskName + " （已完成）");
-                ui->textBrowser->append(r.yantuoOut);
-
-                /***** 5.2 绘图 TabWidget *****/
-                QTabWidget *tabWidget = new QTabWidget();
-
-                // —— 延拓前
-                {
-                    QWidget *tab1 = new QWidget(tabWidget);
-                    QVBoxLayout *layout1 = new QVBoxLayout(tab1);
-                    auto *draw_form1 = new draw_Form(tab1);
-                    QVector<double> xx1, yy1, zz1;
-                    draw_form1->create_xyz_f(inputFilePath, xx1, yy1, zz1);
-                    draw_form1->autoset_heatMapView(xx1, yy1, zz1);
-                    if (draw_form1->magWarn)
-                        draw_form1->autoset_contourView(xx1, yy1, zz1);
-                    layout1->addWidget(draw_form1);
-                    tabWidget->addTab(tab1, QStringLiteral("延拓前"));
-                }
-
-                // —— 延拓后
-                {
-                    QWidget *tab2 = new QWidget(tabWidget);
-                    QVBoxLayout *layout2 = new QVBoxLayout(tab2);
-                    auto *draw_form2 = new draw_Form(tab2);
-                    QVector<double> xx2, yy2, zz2;
-                    draw_form2->create_xyz_f(outputFilePath, xx2, yy2, zz2);
-                    draw_form2->autoset_heatMapView(xx2, yy2, zz2);
-                    if (draw_form2->magWarn)
-                        draw_form2->autoset_contourView(xx2, yy2, zz2);
-                    layout2->addWidget(draw_form2);
-                    tabWidget->addTab(tab2, QStringLiteral("延拓后"));
-                }
-
-                tabWidget->setWindowTitle(QStringLiteral("精度评估"));
-                tabWidget->resize(1100, 700);
-                tabWidget->show();
-
-                ProjectChanged_processed();
-                ui->textBrowser->append("延拓精度检验完成！");
-            });
+    Proc::ContinuationJob job;
+    job.kind = Proc::ContinuationKind::RoundTrip;
+    job.inputFile = geomag_proj_->Path() + "/Measured/" + geomag_proj_->nameList_real[data_index];
+    job.outputFile = processedOutputPath(outName);
+    job.geographic = useBL;
+    job.dx = step_x;
+    job.dy = step_y;
+    job.height = h;
+    job.downward.method = Proc::DownwardMethod(type);
+    job.downward.autoParameter = autoParameter;
+    job.downward.parameter = parameter;
+    startContinuation(job, QStringLiteral("延拓精度评估"));
 }
 
 void MainWindow::on_action_suball_triggered()
@@ -1252,114 +924,69 @@ void MainWindow::on_action_merge_triggered()
 
 void MainWindow::on_action_correct_triggered()
 {
-    // 定义变量：两个日期、数据索引、是否使用大地水准面、测量高度、输出目录等
-    QDate date0;
-    QDate date1;
-    int data_index;
-    int useGeoid;
+    QDate date0, date1;
+    int data_index, useGeoid;
     double height;
-    QString dir;
+    QString outName;
     QDialog dialog(this);
-
-    // 弹出对话框，获取纠正（“通化”）所需的各项参数
-    // 参数列表含义：
-    //  dialog: 由 Qt 创建的模态对话框
-    //  date0, date1: 用户选择的起始/结束日期
-    //  useGeoid: 是否使用大地水准面（0/1）
-    //  height: 测量高度（单位通常是米）
-    //  data_num: （假设为成员变量）可供选择的数据个数
-    //  geomag_proj_->nameList_real: 已加载的实测数据文件名列表
-    //  data_index: 选中的某条测线在 nameList_real 中的下标
-    //  dir: 用户指定的输出文件子目录
-    int ret = inputPara_correct(dialog,date0,date1,useGeoid,height,data_num,geomag_proj_->nameList_real,data_index,dir);
-    if (ret == -1)
+    if (inputPara_correct(dialog, date0, date1, useGeoid, height, data_num, geomag_proj_->nameList_real, data_index, outName) == -1)
         return;
 
-    TimeTongHua my;
+    Proc::TimeCorrectionJob job;
+    job.inputFile = geomag_proj_->Path() + "/Measured/" + geomag_proj_->nameList_real[data_index];
+    job.outputFile = processedOutputPath(outName);
+    job.fromDate = date0;
+    job.toDate = date1;
+    job.aboveGeoid = useGeoid == 1;
+    job.heightKm = height;
 
-    QString str = geomag_proj_->Path()+"/Measured/"+geomag_proj_->nameList_real[data_index];
-    dir = geomag_proj_->Path()+"/Processed/"+dir;
-
-    // 在文本浏览器（textBrowser）中输出状态，表示“通化”过程开始
-    ui->textBrowser->append("通化处理开始...");
-    QCoreApplication::processEvents();
-
-    QString taskName = QString("通化: %1").arg(geomag_proj_->nameList_real[data_index]);
-    QListWidgetItem *item = new QListWidgetItem;
-    item->setText(taskName + " （进行中...）");
+    const QString title = QStringLiteral("通化");
+    const QString inputName = geomag_proj_->nameList_real[data_index];
+    ui->textBrowser->append(QStringLiteral("通化开始：%1").arg(inputName));
+    const QString taskName = QStringLiteral("通化: %1").arg(inputName);
+    QListWidgetItem *item = new QListWidgetItem(taskName + " （进行中…）");
     taskList->addItem(item);
 
-    // 创建一个 QFutureWatcher<void>，用来监控后台任务何时结束
-    QFutureWatcher<void> *watcher = new QFutureWatcher<void>(this);
-
-    // 当 watcher 收到 finished() 信号时，说明后台任务跑完了
-    connect(watcher, &QFutureWatcher<void>::finished, this, [=]() {
-        // 注意：这里是槽函数，运行在主线程，UI 可以直接更新
-
-        ui->textBrowser->append("通化处理完毕!");
-        item->setText(taskName + " （已完成）");
-        QCoreApplication::processEvents();
-
-
-        // —— 进入绘图部分 ——
-        ui->textBrowser->append("绘制图像准备中...");
-        QCoreApplication::processEvents();
-
-
-        // 新建一个 tabwidget 并在其中绘制“通化前/后”的图
-        QTabWidget *tabwidget = new QTabWidget;
-        // tab1：通化前
-        {
-            QWidget *tab1 = new QWidget;
-            QVBoxLayout *layout1 = new QVBoxLayout(tab1);
-            draw_Form *draw1 = new draw_Form;
-            QVector<double> xx1, yy1, zz1;
-            draw1->create_xyz_f(str, xx1, yy1, zz1);
-            draw1->autoset_heatMapView(xx1, yy1, zz1);
-            if (!draw1->magWarn) {
-                delete tabwidget;
-                return;  // 如果出现 magWarn 警告，则不继续绘制
-            }
-            draw1->autoset_contourView(xx1, yy1, zz1);
-            layout1->addWidget(draw1);
-            tabwidget->addTab(tab1, "通化前");
-        }
-
-        // tab2：通化后
-        {
-            QWidget *tab2 = new QWidget;
-            QVBoxLayout *layout2 = new QVBoxLayout(tab2);
-            draw_Form *draw2 = new draw_Form;
-            QVector<double> xx2, yy2, zz2;
-            draw2->create_xyz_f(dir, xx2, yy2, zz2);
-            draw2->autoset_heatMapView(xx2, yy2, zz2);
-            if (!draw2->magWarn) {
-                delete tabwidget;
-                return;
-            }
-            draw2->autoset_contourView(xx2, yy2, zz2);
-            layout2->addWidget(draw2);
-            tabwidget->addTab(tab2, "通化后");
-        }
-
-        tabwidget->setWindowTitle("通化");
-        tabwidget->resize(1100, 700);
-        tabwidget->show();
-
-        ui->textBrowser->append("绘制图像完毕!\n");
-        QCoreApplication::processEvents();
-
-        // 任务结束后，记得 delete watcher
+    auto *watcher = new QFutureWatcher<Proc::TimeCorrectionOutcome>(this);
+    connect(watcher, &QFutureWatcher<Proc::TimeCorrectionOutcome>::finished, this, [=]() {
+        const Proc::TimeCorrectionOutcome out = watcher->result();
         watcher->deleteLater();
-    });
+        if (closing_)
+            return;
+        for (const QString &line : out.log)
+            ui->textBrowser->append(QStringLiteral("  ") + line);
+        if (!out.ok()) {
+            ui->textBrowser->append(QStringLiteral("错误: 通化失败：%1").arg(out.error));
+            item->setText(taskName + " （处理失败）");
+            return;
+        }
+        item->setText(taskName + " （已完成）");
+        ui->textBrowser->append(QStringLiteral("通化完成！"));
 
-    // 使用 QtConcurrent::run 在后台线程执行 CalMag
-    QFuture<void> future = QtConcurrent::run([=]() {
-        // 这里写后台计算逻辑，和原来 my.CalMag 一模一样
-        TimeTongHua my;
-        my.CalMag(str, useGeoid, height, date0, date1, dir);
+        auto *tabs = new QTabWidget;
+        tabs->setAttribute(Qt::WA_DeleteOnClose);
+        auto addMap = [tabs](const QString &file, const QString &name) {
+            auto *page = new QWidget(tabs);
+            auto *layout = new QVBoxLayout(page);
+            auto *form = new draw_Form(page);
+            QVector<double> xx, yy, zz;
+            form->create_xyz_f(file, xx, yy, zz);
+            if (!xx.isEmpty()) {
+                form->autoset_heatMapView(xx, yy, zz);
+                if (form->magWarn)
+                    form->autoset_contourView(xx, yy, zz);
+            }
+            layout->addWidget(form);
+            tabs->addTab(page, name);
+        };
+        addMap(job.inputFile, QStringLiteral("通化前"));
+        addMap(job.outputFile, QStringLiteral("通化后"));
+        tabs->setWindowTitle(title);
+        tabs->resize(1100, 700);
+        tabs->show();
+        ProjectChanged_processed();
     });
-    watcher->setFuture(future);
+    watcher->setFuture(QtConcurrent::run([job]() { return Proc::runTimeCorrection(job); }));
 }
 
 void MainWindow::on_actionshow_triggered()

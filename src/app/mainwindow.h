@@ -21,9 +21,9 @@
 #include "referencemap/inputpara_rm.h"
 #include "draw/draw_form.h"
 #include "dataprocessing/inputpara_dp.h"
-#include "dataprocessing/extension.h"
+#include "dataprocessing/continuation.h"
 #include "dataprocessing/mergeform.h"
-#include "dataprocessing/Time_TongHua.h"
+#include "dataprocessing/timecorrection.h"
 #include "dataprocessing/accuracy.h"
 #include "dataprocessing/MagneticComplexityAnalyzer.h"
 #include "subarea/subareablocks.h"
@@ -149,6 +149,9 @@ private:
     void UpdateHistoricalProject();                         // 更新历史工程信息
     void LoadHistoricalProjInfo();                          // 加载历史工程信息
     void SaveHistoricalProjInfo();                          // 保存历史工程信息
+
+    void startContinuation(const Proc::ContinuationJob &job, const QString &title);
+    QString processedOutputPath(const QString &fileName) const;
 
     Ui::MainWindow      *ui;                                // 主窗体
     BuildProjectForm    *build_project_form_;               // 新建工程窗口

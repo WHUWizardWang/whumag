@@ -255,54 +255,51 @@ void subareaBlocks::subModel(Datainfo datainfo)
 
 
 
+// Joins the block results into one grid (step 0.5, window 3, equal weights).  Blocks overlap, so
+// neither a level adjustment nor gross-error rejection is wanted here.
 void subareaBlocks::submerge(Datapoint &all)
 {
-    rongHe rh;
-    //    double min_i = dataInput[ijBounds[0][0].i_min][ijBounds[0][0].j_min].x;
-    //    double min_j = dataInput[ijBounds[0][0].i_min][ijBounds[0][0].j_min].y;
-    //    double max_i = dataInput[ijBounds[row_blockCount-1][col_blockCount-1].i_max]
-    //            [ijBounds[row_blockCount-1][col_blockCount-1].j_max].x;
-    //    double max_j = dataInput[ijBounds[row_blockCount-1][col_blockCount-1].i_max]
-    //            [ijBounds[row_blockCount-1][col_blockCount-1].j_max].y;
-    QVector<double> xx,yy;
-    for (const auto elem:all)
-    {
-        xx.push_back(elem.second.X);
-        yy.push_back(elem.second.Y);
-    }
-    if (xx.isEmpty())
+    if (all.empty())
     {
         qWarning() << "subareaBlocks::submerge: 'all' is empty, aborting submerge";
         return;
     }
-    double min_i = *std::min_element(xx.begin(), xx.end());
-    double max_i = *std::max_element(xx.begin(), xx.end());
-    double min_j = *std::min_element(yy.begin(), yy.end());
-    double max_j = *std::max_element(yy.begin(), yy.end());
-    double step_i = 0.5;
-    double step_j = 0.5;
-    for (int i = 0;i<row_blockCount;i++)
+    double min_x = std::numeric_limits<double>::max(), max_x = std::numeric_limits<double>::lowest();
+    double min_y = min_x, max_y = max_x;
+    for (const auto &elem : all)
     {
-        for (int j = 0;j<col_blockCount;j++)
-        {
-            std::vector<Point> p;
-            for (const auto elem:datapoint_result[i][j])
-            {
-                Point point;
-                point.L = elem.second.X;
-                point.B = elem.second.Y;
-                point.T = elem.second.tMagnetic;
-                point.m = 1;
-                p.push_back(point);
-            }
-            rh.doc_points.push_back(p);
-        }
+        min_x = std::min(min_x, elem.second.X);
+        max_x = std::max(max_x, elem.second.X);
+        min_y = std::min(min_y, elem.second.Y);
+        max_y = std::max(max_y, elem.second.Y);
     }
-    rh.rongHe_run3(3.0,3.0,min_j,min_i,max_j,max_i,step_j,step_i);
-    for (auto elem:rh.data)
+    const double step = 0.5;
+
+    std::vector<Proc::FusionSource> sources(1);
+    sources[0].name = QStringLiteral("blocks");
+    for (int i = 0; i < row_blockCount; i++)
+        for (int j = 0; j < col_blockCount; j++)
+            for (const auto &elem : datapoint_result[i][j])
+                sources[0].samples.push_back({elem.second.X, elem.second.Y, elem.second.tMagnetic});
+
+    Proc::GridSpec grid;
+    grid.xMin = std::floor(min_x / step) * step;
+    grid.xMax = std::ceil(max_x / step) * step;
+    grid.yMin = std::floor(min_y / step) * step;
+    grid.yMax = std::ceil(max_y / step) * step;
+    grid.dx = grid.dy = step;
+    Proc::FusionOptions options;
+    options.windowX = options.windowY = 3.0;
+    options.removeBias = false;
+    options.rejectOutliers = false;
+    const Proc::FusionResult fused = Proc::fuse(std::move(sources), grid, options);
+    if (!fused.ok())
     {
-        result.push_back({elem.B,elem.L,elem.T});
+        qWarning() << "subareaBlocks::submerge:" << fused.error;
+        return;
     }
+    for (const Proc::Sample &s : Proc::gridToSamples(fused.grid))
+        result.push_back({s.y, s.x, s.v});
 }
 
 double subareaBlocks::distanceBetween(SinglePoint p1,AnoPoint p2)
