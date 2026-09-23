@@ -28,6 +28,7 @@ struct Job
     QString insFile;      // INS track: x y magnetic
     QString truthFile;    // true path: x y (optional, only used for the accuracy)
     QString outputDir;    // results are written here
+    CoordinateUnit unit = CoordinateUnit::Kilometre;   // unit of all x / y values (display, errors in metres)
     double dx = 0.5;      // background grid resolution
     double dy = 0.5;
     double searchRadius = 9.0;   // TERCOM: start positions within this distance of the INS start
@@ -38,7 +39,8 @@ struct MatchedTrack
     QString key;     // file / style key: "tercom", "iccp", "sitan", "tercom_plain", "tercom_iccp"
     QString label;   // shown in the legend and the log
     Path path;
-    double rms = std::numeric_limits<double>::quiet_NaN();   // against the true path
+    double rms = std::numeric_limits<double>::quiet_NaN();         // against the true path, coordinate units
+    double rmsMetres = std::numeric_limits<double>::quiet_NaN();   // the same in metres
     int comparedPoints = 0;
     QString file;    // where the track was written
 };
@@ -47,6 +49,9 @@ struct Outcome
 {
     QString error;          // set when nothing could be computed
     bool cancelled = false;
+    CoordinateUnit unit = CoordinateUnit::Kilometre;
+    double insRms = std::numeric_limits<double>::quiet_NaN();         // unmatched INS track vs the true path
+    double insRmsMetres = std::numeric_limits<double>::quiet_NaN();
     GridField grid;
     Path ins;
     Path truth;

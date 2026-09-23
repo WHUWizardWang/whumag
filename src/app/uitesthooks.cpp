@@ -4,6 +4,7 @@
 
 #include <QApplication>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QRadioButton>
@@ -143,6 +144,17 @@ void uiTestScheduleForMainWindow(QWidget *mainWindow)
                         edit->setText(qEnvironmentVariable(f.second));
                 if (auto *combo = form->findChild<QComboBox *>(QStringLiteral("methodCombo")))
                     combo->setCurrentIndex(navMethod.toInt());
+                // optional: _UNIT (0 km, 1 m, 2 degree), _DX, _DY, _RADIUS
+                if (qEnvironmentVariableIsSet("WHUMAG_TEST_NAV_UNIT"))
+                    if (auto *combo = form->findChild<QComboBox *>(QStringLiteral("unitCombo")))
+                        combo->setCurrentIndex(qEnvironmentVariableIntValue("WHUMAG_TEST_NAV_UNIT"));
+                const QPair<const char *, const char *> spins[] = {{"gridDxSpin", "WHUMAG_TEST_NAV_DX"},
+                                                                   {"gridDySpin", "WHUMAG_TEST_NAV_DY"},
+                                                                   {"searchRadiusSpin", "WHUMAG_TEST_NAV_RADIUS"}};
+                for (const auto &s : spins)
+                    if (qEnvironmentVariableIsSet(s.second))
+                        if (auto *spin = form->findChild<QDoubleSpinBox *>(QLatin1String(s.first)))
+                            spin->setValue(qEnvironmentVariable(s.second).toDouble());
                 form->show();
                 form->startMatching();
             }

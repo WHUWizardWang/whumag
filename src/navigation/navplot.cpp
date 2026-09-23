@@ -83,8 +83,13 @@ QCustomPlot *createResultPlot(const Outcome &outcome, QWidget *parent)
 {
     auto *plot = new QCustomPlot(parent);
     plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
-    plot->xAxis->setLabel(QStringLiteral("X"));
-    plot->yAxis->setLabel(QStringLiteral("Y"));
+    if (outcome.unit == CoordinateUnit::Degree) {
+        plot->xAxis->setLabel(QStringLiteral("经度 (°)"));
+        plot->yAxis->setLabel(QStringLiteral("纬度 (°)"));
+    } else {
+        plot->xAxis->setLabel(QStringLiteral("X (%1)").arg(unitSymbol(outcome.unit)));
+        plot->yAxis->setLabel(QStringLiteral("Y (%1)").arg(unitSymbol(outcome.unit)));
+    }
 
     // background field straight from the grid (holes transparent)
     const GridField &g = outcome.grid;

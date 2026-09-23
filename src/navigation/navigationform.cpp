@@ -139,15 +139,25 @@ void NavigationForm::buildLayout()
         spin->setValue(value);
         return spin;
     };
+    unitCombo_ = new QComboBox;
+    unitCombo_->setObjectName(QStringLiteral("unitCombo"));
+    for (Nav::CoordinateUnit u : {Nav::CoordinateUnit::Kilometre, Nav::CoordinateUnit::Metre, Nav::CoordinateUnit::Degree})
+        unitCombo_->addItem(Nav::unitName(u));
+    connect(unitCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &NavigationForm::onUnitChanged);
+    ll->addLayout(FormKit::field(tr("坐标单位"), unitCombo_, tr("所有输入文件中 x、y 的单位，分辨率、搜索半径和误差都按这个单位")));
+
     gridDxSpin_ = makeSpin(0.5, 1e-6, 1e6, 6);
     gridDySpin_ = makeSpin(0.5, 1e-6, 1e6, 6);
+    gridDxSpin_->setObjectName(QStringLiteral("gridDxSpin"));
+    gridDySpin_->setObjectName(QStringLiteral("gridDySpin"));
     auto *res = new QHBoxLayout;
     res->setSpacing(12);
     res->addLayout(FormKit::field(tr("背景场分辨率 · X"), gridDxSpin_), 1);
     res->addLayout(FormKit::field(tr("背景场分辨率 · Y"), gridDySpin_), 1);
     ll->addLayout(res);
 
-    searchRadiusSpin_ = makeSpin(9.0, 1e-6, 1e6, 3);
+    searchRadiusSpin_ = makeSpin(9.0, 1e-6, 1e6, 6);
+    searchRadiusSpin_->setObjectName(QStringLiteral("searchRadiusSpin"));
     searchRadiusField_ = new QWidget;
     auto *radiusLayout = FormKit::field(tr("TERCOM 搜索半径"), searchRadiusSpin_,
                                         tr("在 INS 起点周围多大范围内搜索真实起点，单位与坐标相同。INS 初始误差越大，需要的半径越大。"));
@@ -242,7 +252,9 @@ void NavigationForm::loadSettings()
     gridDySpin_->setValue(s.value(QStringLiteral("gridDy"), 0.5).toDouble());
     searchRadiusSpin_->setValue(s.value(QStringLiteral("searchRadius"), 9.0).toDouble());
     methodCombo_->setCurrentIndex(qBound(0, s.value(QStringLiteral("method"), 0).toInt(), kMethodCount - 1));
+    unitCombo_->setCurrentIndex(qBound(0, s.value(QStringLiteral("unit"), 0).toInt(), 2));
     s.endGroup();
+    onUnitChanged();
 }
 
 void NavigationForm::saveSettings() const
@@ -257,6 +269,7 @@ void NavigationForm::saveSettings() const
     s.setValue(QStringLiteral("gridDy"), gridDySpin_->value());
     s.setValue(QStringLiteral("searchRadius"), searchRadiusSpin_->value());
     s.setValue(QStringLiteral("method"), methodCombo_->currentIndex());
+    s.setValue(QStringLiteral("unit"), unitCombo_->currentIndex());
     s.endGroup();
 }
 
@@ -274,6 +287,18 @@ void NavigationForm::onMethodChanged()
     for (int i = 0; i < resultPages_.size(); ++i)
         resultPages_[i]->setVisible(i == int(m));
     preview_->refreshEmptyState();
+}
+
+Nav::CoordinateUnit NavigationForm::currentUnit() const
+{
+    return Nav::CoordinateUnit(qBound(0, unitCombo_->currentIndex(), 2));
+}
+
+void NavigationForm::onUnitChanged()
+{
+    const QString suffix = QStringLiteral(" ") + Nav::unitSymbol(currentUnit());
+    for (QDoubleSpinBox *spin : {gridDxSpin_, gridDySpin_, searchRadiusSpin_})
+        spin->setSuffix(currentUnit() == Nav::CoordinateUnit::Degree ? QStringLiteral("°") : suffix);
 }
 
 bool NavigationForm::validateInputs(Nav::Job *job)
@@ -310,6 +335,7 @@ bool NavigationForm::validateInputs(Nav::Job *job)
     job->insFile = QDir::fromNativeSeparators(insFileEdit_->text().trimmed());
     job->truthFile = QDir::fromNativeSeparators(truthFileEdit_->text().trimmed());
     job->outputDir = QDir::fromNativeSeparators(outputDirEdit_->text().trimmed());
+    job->unit = currentUnit();
     job->dx = gridDxSpin_->value();
     job->dy = gridDySpin_->value();
     job->searchRadius = searchRadiusSpin_->value();
@@ -387,9 +413,9 @@ void NavigationForm::showOutcome(const Nav::Outcome &outcome)
 
     QStringList parts;
     if (!outcome.truth.isEmpty()) {
-        parts << tr("INS %1").arg(Nav::rmsError(outcome.ins, outcome.truth), 0, 'f', 4);
+        parts << tr("INS %1").arg(Nav::formatError(outcome.insRms, outcome.insRmsMetres, outcome.unit));
         for (const Nav::MatchedTrack &t : outcome.tracks)
-            parts << QStringLiteral("%1 %2").arg(t.label).arg(t.rms, 0, 'f', 4);
+            parts << QStringLiteral("%1 %2").arg(t.label, Nav::formatError(t.rms, t.rmsMetres, outcome.unit));
     }
     auto *summary = new QLabel(parts.isEmpty() ? tr("未提供真实航迹，不计算精度")
                                                : tr("均方根误差　%1").arg(parts.join(QStringLiteral("　·　"))));
@@ -405,11 +431,13 @@ void NavigationForm::showOutcome(const Nav::Outcome &outcome)
     if (plot->savePng(image, 1400, 900))
         appendLog(tr("结果图已保存：%1").arg(QDir::toNativeSeparators(image)));
 
-    double best = std::numeric_limits<double>::quiet_NaN();
+    const Nav::MatchedTrack *best = nullptr;
     for (const Nav::MatchedTrack &t : outcome.tracks)
-        if (std::isfinite(t.rms) && !(t.rms >= best))
-            best = t.rms;
-    preview_->setStatus(std::isfinite(best) ? tr("已完成 · 最小误差 %1").arg(best, 0, 'f', 4) : tr("已完成"), Chip::Ok);
+        if (std::isfinite(t.rms) && (!best || t.rms < best->rms))
+            best = &t;
+    preview_->setStatus(best ? tr("已完成 · 最小误差 %1").arg(Nav::formatError(best->rms, best->rmsMetres, outcome.unit))
+                             : tr("已完成"),
+                        Chip::Ok);
     appendLog(tr("%1 完成，总用时 %2 ms").arg(Nav::methodTitle(runningMethod_)).arg(outcome.elapsedMs), true);
     preview_->refreshEmptyState();
 }

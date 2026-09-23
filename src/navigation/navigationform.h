@@ -44,6 +44,8 @@ private:
                             const QString &dialogTitle);
     bool validateInputs(Nav::Job *job);
     void onMethodChanged();
+    void onUnitChanged();
+    Nav::CoordinateUnit currentUnit() const;
     void onRunFinished();
     void showOutcome(const Nav::Outcome &outcome);
     void appendLog(const QString &line, bool important = false);
@@ -57,6 +59,7 @@ private:
     QLineEdit *truthFileEdit_ = nullptr;
     QLineEdit *outputDirEdit_ = nullptr;
     QComboBox *methodCombo_ = nullptr;
+    QComboBox *unitCombo_ = nullptr;
     QLabel *methodHint_ = nullptr;
     QDoubleSpinBox *gridDxSpin_ = nullptr;
     QDoubleSpinBox *gridDySpin_ = nullptr;

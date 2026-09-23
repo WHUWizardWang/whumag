@@ -56,8 +56,10 @@ SitanResult SitanMatcher::match(const Track &track, const SitanOptions &options,
 
     // state: offset (dx, dy) to add to the input track
     Eigen::Vector2d offset = Eigen::Vector2d::Zero();
-    Eigen::Matrix2d P = Eigen::Matrix2d::Identity() * (options.initialPositionSigma * options.initialPositionSigma);
-    const Eigen::Matrix2d Q = Eigen::Matrix2d::Identity() * (options.processNoise * options.processNoise);
+    const double cell = 0.5 * (grid_.dx() + grid_.dy());
+    const double sigma0 = options.initialPositionSigmaCells * cell, q = options.processNoiseCells * cell;
+    Eigen::Matrix2d P = Eigen::Matrix2d::Identity() * (sigma0 * sigma0);
+    const Eigen::Matrix2d Q = Eigen::Matrix2d::Identity() * (q * q);
     const double R = options.measurementSigma * options.measurementSigma;
 
     result.positions.reserve(track.size());

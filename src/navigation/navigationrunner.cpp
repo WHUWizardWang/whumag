@@ -172,6 +172,13 @@ bool Run::load()
     }
     if (outside > 0)
         log(QStringLiteral("注意：INS 航迹有 %1 个点在背景场范围之外").arg(outside));
+
+    if (job_.unit == CoordinateUnit::Degree) {
+        if (out_.grid.xMin() < -180 || out_.grid.xMax() > 360 || out_.grid.yMin() < -90 || out_.grid.yMax() > 90)
+            log(QStringLiteral("注意：坐标超出经纬度的取值范围，坐标单位是否选错？"));
+        log(QStringLiteral("注意：经纬度坐标下误差按当地尺度折算成米；TERCOM 的旋转和 ICCP 按经纬度平面计算，"
+                           "区域较大或纬度较高时建议先投影为平面坐标"));
+    }
     return true;
 }
 
@@ -181,8 +188,10 @@ void Run::addTrack(const QString &key, const QString &label, const Path &path, q
     t.key = key;
     t.label = label;
     t.path = path;
-    if (!out_.truth.isEmpty())
+    if (!out_.truth.isEmpty()) {
         t.rms = rmsError(path, out_.truth, &t.comparedPoints);
+        t.rmsMetres = rmsErrorMetres(path, out_.truth, job_.unit);
+    }
 
     // x, y and the measured value of each point
     QVector<double> measured;
@@ -198,7 +207,7 @@ void Run::addTrack(const QString &key, const QString &label, const Path &path, q
 
     QString line = QStringLiteral("%1 完成，用时 %2 ms").arg(label).arg(ms);
     if (std::isfinite(t.rms))
-        line += QStringLiteral("，均方根误差 %1").arg(t.rms, 0, 'f', 4);
+        line += QStringLiteral("，均方根误差 %1").arg(formatError(t.rms, t.rmsMetres, job_.unit));
     log(line);
     out_.tracks.append(t);
 }
@@ -213,10 +222,12 @@ void Run::writeAccuracy()
         return;
     QTextStream out(&file);
     out.setRealNumberPrecision(8);
-    out << "# method, rms position error, compared points\n";
-    out << "INS," << rmsError(out_.ins, out_.truth) << ',' << qMin(out_.ins.size(), out_.truth.size()) << '\n';
+    const QString unit = unitSymbol(job_.unit);
+    out << "# coordinate unit: " << unit << '\n';
+    out << "# method, rms position error (" << unit << "), rms position error (m), compared points\n";
+    out << "INS," << out_.insRms << ',' << out_.insRmsMetres << ',' << qMin(out_.ins.size(), out_.truth.size()) << '\n';
     for (const MatchedTrack &t : out_.tracks)
-        out << t.label << ',' << t.rms << ',' << t.comparedPoints << '\n';
+        out << t.label << ',' << t.rms << ',' << t.rmsMetres << ',' << t.comparedPoints << '\n';
     out.flush();
     if (file.commit())
         out_.accuracyFile = path;
@@ -233,9 +244,10 @@ TercomResult Run::runTercom(bool rotation)
     const TercomMatcher matcher(map_);
     TercomResult r = matcher.match(ins_, options, cancel_);
     if (r.ok())
-        log(QStringLiteral("    试探起点 %1 个，平移 (%2, %3)，航向修正 %4°，磁场均方差 %5")
+        log(QStringLiteral("    试探起点 %1 个，平移 (%2, %3) %4，航向修正 %5°，磁场均方差 %6")
                 .arg(r.candidates)
-                .arg(r.shift.x(), 0, 'f', 3).arg(r.shift.y(), 0, 'f', 3)
+                .arg(r.shift.x(), 0, 'g', 6).arg(r.shift.y(), 0, 'g', 6)
+                .arg(unitSymbol(job_.unit))
                 .arg(r.rotationDeg, 0, 'f', 2)
                 .arg(r.msd, 0, 'f', 4));
     return r;
@@ -245,6 +257,7 @@ Outcome Run::execute()
 {
     QElapsedTimer total;
     total.start();
+    out_.unit = job_.unit;
     try {
         if (load())
             runMethods();
@@ -259,8 +272,11 @@ Outcome Run::execute()
 
 void Run::runMethods()
 {
-    if (!out_.truth.isEmpty())
-        log(QStringLiteral("INS 原始航迹的均方根误差 %1").arg(rmsError(out_.ins, out_.truth), 0, 'f', 4));
+    if (!out_.truth.isEmpty()) {
+        out_.insRms = rmsError(out_.ins, out_.truth);
+        out_.insRmsMetres = rmsErrorMetres(out_.ins, out_.truth, job_.unit);
+        log(QStringLiteral("INS 原始航迹的均方根误差 %1").arg(formatError(out_.insRms, out_.insRmsMetres, job_.unit)));
+    }
 
     const Method m = job_.method;
     const IccpMatcher iccp(out_.grid);
@@ -318,7 +334,7 @@ void Run::runMethods()
         stepTimer_.start();
         IccpOptions options;
         if (m == Method::TercomIccp)
-            options.tolerance = 1e-3;   // the start is already close
+            options.toleranceCells2 = 4e-3;   // the start is already close
         const IccpResult r = iccp.match(withPositions(ins_, start), options, cancel_);
         if (!r.ok()) {
             fail(QStringLiteral("ICCP "), r.error);

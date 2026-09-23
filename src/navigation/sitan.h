@@ -10,8 +10,9 @@ namespace Nav {
 struct SitanOptions
 {
     // Defaults chosen on the sample data and two synthetic sets (SITAN refines a TERCOM result).
-    double initialPositionSigma = 0.5;   // uncertainty of the input track at its start (map units)
-    double processNoise = 0.05;          // growth of the position error per step (map units)
+    // Position noise is given in grid cells, so it does not depend on the coordinate unit.
+    double initialPositionSigmaCells = 1.0;   // uncertainty of the input track at its start
+    double processNoiseCells = 0.1;           // growth of the position error per step
     double measurementSigma = 4.0;       // magnetic measurement + map / interpolation error (field units)
     double innovationClamp = 3.0;        // innovations larger than this many sigma are clipped (outliers)
     int fitHalfWidth = 2;                // local plane fit over (2 * half + 1)^2 grid nodes

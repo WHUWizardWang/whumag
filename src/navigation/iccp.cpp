@@ -180,10 +180,10 @@ IccpResult IccpMatcher::match(const Track &track, const IccpOptions &options, co
             const double dx = next[i].x() - current[i].x(), dy = next[i].y() - current[i].y();
             moved += dx * dx + dy * dy;
         }
-        moved /= n;
+        moved /= n * grid_.dx() * grid_.dy();
         current = next;
         result.iterations = iter + 1;
-        if (moved < options.tolerance) {
+        if (moved < options.toleranceCells2) {
             result.converged = true;
             break;
         }

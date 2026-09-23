@@ -105,9 +105,32 @@ Path readPath(const QString &path, LoadReport *report);
 // Writes "x,y" per line, or "x,y,value" when |values| has one value per point.
 bool writePath(const QString &path, const Path &points, const QVector<double> &values = {}, QString *error = nullptr);
 
-// Root-mean-square distance between point i of |a| and point i of |b| over the common length.
-// NaN when there is no common point.
+// Root-mean-square distance between point i of |a| and point i of |b| over the common length, in
+// coordinate units.  NaN when there is no common point.
 double rmsError(const Path &a, const Path &b, int *comparedPoints = nullptr);
+
+// ---------------------------------------------------------------- coordinate units
+// Unit of the x / y coordinates of all input files.  The algorithms do not depend on it; it is
+// used for display and to express errors in metres.  For Degree, x is longitude and y latitude.
+enum class CoordinateUnit
+{
+    Kilometre = 0,
+    Metre,
+    Degree,
+};
+
+QString unitSymbol(CoordinateUnit unit);   // "km", "m", "°"
+QString unitName(CoordinateUnit unit);     // for the unit selector
+
+// A length in coordinate units as text: "0.1674 km", "167.40 m", "0.001503°".
+QString formatLength(double value, CoordinateUnit unit);
+
+// Same as rmsError, in metres.  Degrees are converted with the local scale at each point
+// (spherical earth, x = longitude, y = latitude).
+double rmsErrorMetres(const Path &a, const Path &b, CoordinateUnit unit);
+
+// An error for display: coordinate units, plus the metres for degrees ("0.001503°（约 167 m）").
+QString formatError(double rms, double rmsMetres, CoordinateUnit unit);
 
 } // namespace Nav
 

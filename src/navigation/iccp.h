@@ -12,8 +12,9 @@ namespace Nav {
 struct IccpOptions
 {
     int maxIterations = 200;
-    // Stops when the mean squared movement of the points in one iteration drops below this.
-    double tolerance = 1e-6;
+    // Stops when the mean squared movement of the points in one iteration, in grid cells squared,
+    // drops below this (so it does not depend on the coordinate unit).
+    double toleranceCells2 = 4e-6;
 };
 
 struct IccpResult

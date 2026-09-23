@@ -279,4 +279,67 @@ double rmsError(const Path &a, const Path &b, int *comparedPoints)
     return std::sqrt(sum / n);
 }
 
+// ---------------------------------------------------------------- coordinate units
+QString unitSymbol(CoordinateUnit unit)
+{
+    switch (unit) {
+    case CoordinateUnit::Kilometre: return QStringLiteral("km");
+    case CoordinateUnit::Metre: return QStringLiteral("m");
+    case CoordinateUnit::Degree: return QStringLiteral("°");
+    }
+    return QString();
+}
+
+QString unitName(CoordinateUnit unit)
+{
+    switch (unit) {
+    case CoordinateUnit::Kilometre: return QStringLiteral("公里 (km)");
+    case CoordinateUnit::Metre: return QStringLiteral("米 (m)");
+    case CoordinateUnit::Degree: return QStringLiteral("度（x 为经度，y 为纬度）");
+    }
+    return QString();
+}
+
+QString formatLength(double value, CoordinateUnit unit)
+{
+    if (!std::isfinite(value))
+        return QStringLiteral("—");
+    switch (unit) {
+    case CoordinateUnit::Kilometre: return QStringLiteral("%1 km").arg(value, 0, 'f', 4);
+    case CoordinateUnit::Metre: return QStringLiteral("%1 m").arg(value, 0, 'f', 2);
+    case CoordinateUnit::Degree: return QStringLiteral("%1°").arg(value, 0, 'f', 6);
+    }
+    return QString::number(value);
+}
+
+double rmsErrorMetres(const Path &a, const Path &b, CoordinateUnit unit)
+{
+    switch (unit) {
+    case CoordinateUnit::Kilometre: return rmsError(a, b) * 1000.0;
+    case CoordinateUnit::Metre: return rmsError(a, b);
+    case CoordinateUnit::Degree: break;
+    }
+    const int n = qMin(a.size(), b.size());
+    if (n == 0)
+        return std::numeric_limits<double>::quiet_NaN();
+    constexpr double kMetresPerDegree = 6371008.8 * M_PI / 180.0;   // mean earth radius
+    double sum = 0;
+    for (int i = 0; i < n; ++i) {
+        const double lat = 0.5 * (a[i].y() + b[i].y()) * M_PI / 180.0;
+        const double ex = (a[i].x() - b[i].x()) * std::cos(lat) * kMetresPerDegree;
+        const double ey = (a[i].y() - b[i].y()) * kMetresPerDegree;
+        sum += ex * ex + ey * ey;
+    }
+    return std::sqrt(sum / n);
+}
+
+QString formatError(double rms, double rmsMetres, CoordinateUnit unit)
+{
+    if (unit != CoordinateUnit::Degree || !std::isfinite(rmsMetres))
+        return formatLength(rms, unit);
+    const QString metres = rmsMetres >= 1000 ? QStringLiteral("%1 km").arg(rmsMetres / 1000.0, 0, 'f', 3)
+                                              : QStringLiteral("%1 m").arg(rmsMetres, 0, 'f', 1);
+    return QStringLiteral("%1（约 %2）").arg(formatLength(rms, unit), metres);
+}
+
 } // namespace Nav
