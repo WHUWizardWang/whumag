@@ -11,6 +11,7 @@
 #include "MagAno/anoqueryform.h"
 #include "dataquerydialog.h"
 #include "logtextbrowser.h"
+#include "navigation/navigationform.h"
 #include "tasklistwidget.h"
 #include "wmm/queryform.h"
 #include <QDir>
@@ -122,6 +123,29 @@ void uiTestScheduleForMainWindow(QWidget *mainWindow)
             });
             closer->start(700);
             QMetaObject::invokeMethod(form, "on_pushButton_clicked", Qt::DirectConnection);
+        });
+    }
+    // WHUMAG_TEST_NAV=<method 0..4> opens the matching-navigation window with WHUMAG_TEST_NAV_MAP / _INS / _TRUTH /
+    // _OUT and starts the run (the screenshot is taken when WHUMAG_TEST_DELAY expires)
+    const QString navMethod = qEnvironmentVariable("WHUMAG_TEST_NAV");
+    if (!navMethod.isEmpty()) {
+        QTimer::singleShot(900, mainWindow, [navMethod]() {
+            for (QWidget *w : QApplication::allWidgets()) {
+                auto *form = qobject_cast<NavigationForm *>(w);
+                if (!form)
+                    continue;
+                const QPair<const char *, const char *> fields[] = {{"mapFileEdit", "WHUMAG_TEST_NAV_MAP"},
+                                                                    {"insFileEdit", "WHUMAG_TEST_NAV_INS"},
+                                                                    {"truthFileEdit", "WHUMAG_TEST_NAV_TRUTH"},
+                                                                    {"outputDirEdit", "WHUMAG_TEST_NAV_OUT"}};
+                for (const auto &f : fields)
+                    if (auto *edit = form->findChild<QLineEdit *>(QLatin1String(f.first)))
+                        edit->setText(qEnvironmentVariable(f.second));
+                if (auto *combo = form->findChild<QComboBox *>(QStringLiteral("methodCombo")))
+                    combo->setCurrentIndex(navMethod.toInt());
+                form->show();
+                form->startMatching();
+            }
         });
     }
     // WHUMAG_TEST_SHOW=ClassA,ClassB shows every top-level widget of those classes (forms owned by the main window)

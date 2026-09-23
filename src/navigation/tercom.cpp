@@ -1,505 +1,224 @@
 #include "tercom.h"
-namespace Geomagnetic
+
+#include "nanoflann.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
+namespace Nav {
+
+namespace {
+
+constexpr double kDegToRad = M_PI / 180.0;
+constexpr double kInf = std::numeric_limits<double>::infinity();
+
+struct MapCloud
 {
-	// Constructor
-	TercomMatching::TercomMatching()
-	{
-	}
-    int TercomMatching::ReadBackground(const QString &filePath)
-    {
-        QFile file(filePath);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-            qWarning()<<"open file failed!";
-        if (file.size()==0)
-            return -1;
-        QTextStream in(&file);
-        int index = 0;
+    std::vector<MapPoint> points;
+    size_t kdtree_get_point_count() const { return points.size(); }
+    double kdtree_get_pt(size_t i, size_t dim) const { return dim == 0 ? points[i].x : points[i].y; }
+    template <class Box> bool kdtree_get_bbox(Box &) const { return false; }
+};
 
-        while (!in.atEnd())
-        {
-            index++;
-            QString line = in.readLine().trimmed();
-            if (line.isEmpty())
-            {
-                error_str = error_str + "错误3(空缺行): 第"+QString::number(index)+"行 "+"\n";
-                continue;
-            }
-            QStringList fields = line.split(QRegExp("\\s+|,|;"), QString::SkipEmptyParts);
-            if (fields.size() != 3)
-            {
-                error_str = error_str + "错误1(过少或过多): 第"+QString::number(index)+"行 "+line+"\n";
-                continue;
-            }
-            if (!isNumeric(fields[0])||!isNumeric(fields[1])||!isNumeric(fields[2]))
-            {
-                error_str = error_str + "错误2(有其他字符): 第"+QString::number(index)+"行 "+line+"\n";
-                continue;
-            }
-            double xx = fields[0].toDouble();
-            double yy = fields[1].toDouble();
-            double zz = fields[2].toDouble();
-            MapData md;
-            md.x = xx;
-            md.y = yy;
-            md.magnetic = zz;
-            base.push_back(md);
-        }
-        file.close();
+using MapTree = nanoflann::KDTreeSingleIndexAdaptor<nanoflann::L2_Simple_Adaptor<double, MapCloud>, MapCloud, 2, size_t>;
 
-        cloud.pts.clear();
-        for (auto &m : base) {
-            cloud.pts.push_back({ m.x, m.y });
-        }
-        // 创建 KD-Tree，leaf max size 10
-        kdtree.reset(new KDTree2D(2, cloud, nanoflann::KDTreeSingleIndexAdaptorParams(10)));
-        kdtree->buildIndex();
-        return 0;
+bool cancelled(const std::atomic_bool *flag)
+{
+    return flag && flag->load(std::memory_order_relaxed);
+}
+
+} // namespace
+
+struct TercomMatcher::Index
+{
+    MapCloud cloud;
+    std::unique_ptr<MapTree> tree;
+};
+
+TercomMatcher::TercomMatcher(const QVector<MapPoint> &map) : index_(new Index)
+{
+    index_->cloud.points.assign(map.begin(), map.end());
+    if (!index_->cloud.points.empty()) {
+        index_->tree.reset(new MapTree(2, index_->cloud, nanoflann::KDTreeSingleIndexAdaptorParams(10)));
+        index_->tree->buildIndex();
+    }
+}
+
+TercomMatcher::~TercomMatcher() = default;
+
+bool TercomMatcher::isEmpty() const
+{
+    return !index_->tree;
+}
+
+double TercomMatcher::interpolate(double x, double y, const TercomOptions &options) const
+{
+    const size_t k = size_t(std::max(1, options.idwNeighbours));
+    size_t idx[64];
+    double d2[64];
+    const double query[2] = {x, y};
+    const size_t found = index_->tree->knnSearch(query, std::min<size_t>(k, 64), idx, d2);   // sorted, nearest first
+    if (found == 0)
+        return 0.0;
+
+    const double r2 = options.idwRadius * options.idwRadius;
+    const std::vector<MapPoint> &pts = index_->cloud.points;
+    if (!(d2[0] < r2))
+        return pts[idx[0]].value;   // nothing within the radius: nearest sample
+
+    double sumW = 0, sumV = 0;
+    for (size_t i = 0; i < found && d2[i] < r2; ++i) {
+        const double d = std::sqrt(d2[i]);
+        if (d < 1e-6)
+            return pts[idx[i]].value;   // on a sample
+        const double w = 1.0 / d;
+        sumW += w;
+        sumV += w * pts[idx[i]].value;
+    }
+    return sumV / sumW;
+}
+
+TercomResult TercomMatcher::match(const Track &track, const TercomOptions &options, const std::atomic_bool *cancel) const
+{
+    TercomResult result;
+    if (isEmpty()) {
+        result.error = QStringLiteral("背景场为空");
+        return result;
+    }
+    if (track.size() < 2) {
+        result.error = QStringLiteral("INS 航迹少于 2 个点，无法匹配");
+        return result;
     }
 
-    void TercomMatching::ReadINS(const QString &filePath)
-    {
-        QFile file(filePath);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-               qDebug("error");
-        QTextStream in(&file);
-        while (!in.atEnd())
-        {
-            QString line = in.readLine();
-            QStringList fields = line.split(","); // 假设CSV字段由逗号分隔
-            if (fields.size() < 3)
-                    continue;
-            bool okX, okY, okValue;
-            double x = fields[0].toDouble(&okX);
-            double y = fields[1].toDouble(&okY);
-            double value = fields[2].toDouble(&okValue);
-
-            if (!okX || !okY || !okValue)
-                    continue;
-            INSData ins;
-            ins.x = x;
-            ins.y = y;
-            ins.magnetic = value;
-            insData.push_back(ins);
-//            cout<<x<<y<<value;
-        }
-        file.close();
+    const int n = track.size();
+    const double startX = track[0].x, startY = track[0].y;
+    // track relative to its start; a candidate puts the start on a background sample
+    std::vector<double> relX(n), relY(n);
+    for (int i = 0; i < n; ++i) {
+        relX[i] = track[i].x - startX;
+        relY[i] = track[i].y - startY;
     }
 
-    void TercomMatching::ReadTruePath(const QString &filePath)
-    {
-        truePath.clear();
-        const QVector<QPointF> pts = readPointsFromFile(filePath);
-        truePath.reserve(pts.size());
-        for (const QPointF &p : pts) {
-            truePath.push_back(TruePath{p.x(), p.y()});
+    // sum of squared differences for start (sx, sy) and heading change |angle|; stops early once
+    // it exceeds |limit| (the caller only needs to know it is not better)
+    auto cost = [&](double sx, double sy, double angle, double limit) {
+        const double c = std::cos(angle), s = std::sin(angle);
+        double ssd = 0;
+        for (int i = 0; i < n; ++i) {
+            const double x = sx + c * relX[i] - s * relY[i];
+            const double y = sy + s * relX[i] + c * relY[i];
+            const double d = interpolate(x, y, options) - track[i].magnetic;
+            ssd += d * d;
+            if (ssd > limit)
+                return kInf;
         }
-        qDebug()<<"Loaded truePath points:"<<truePath.size();
+        return ssd;
+    };
+
+    // ---- candidate start positions
+    std::vector<nanoflann::ResultItem<size_t, double>> near;
+    const double query[2] = {startX, startY};
+    index_->tree->radiusSearch(query, options.searchRadius * options.searchRadius, near, nanoflann::SearchParameters(0, false));
+    std::vector<size_t> starts;
+    starts.reserve(near.size());
+    for (const auto &hit : near)
+        starts.push_back(hit.first);
+    std::sort(starts.begin(), starts.end());   // file order: deterministic results
+    if (starts.empty()) {
+        result.error = QStringLiteral("INS 起点 %1 范围内没有背景场数据，请检查航迹与背景场是否在同一坐标系")
+                           .arg(options.searchRadius);
+        return result;
     }
+    result.candidates = int(starts.size());
+    const std::vector<MapPoint> &pts = index_->cloud.points;
 
-	void TercomMatching::setReferencePoint(const SinglePoint& refPoint)
-	{
-		referencePoint = refPoint;
-	}
-    void TercomMatching::saveResult(const QString &filePath,const Datapoint &result)
-    {
-        QFile file(filePath);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-        {
-            qWarning() << "fail" << file;
-        }
-        QTextStream out(&file);
-        for (int i = 0;i<result.size();i++)
-        {
-            out << result.at(i).X <<" " <<result.at(i).Y << " "<< insData.at(i).magnetic<<endl;
-        }
-        file.close();
-    }
-	double TercomMatching::calculateDistance(const INSData& insData, const MapData& base) const
-	{
-		// Calculate the distance between two points
-		double dx = insData.x - base.x;
-		double dy = insData.y - base.y;
-		return sqrt(dx * dx + dy * dy);
-	}
+    // ---- coarse search: every start, headings -max .. +max in coarse steps
+    const int coarseSteps = options.searchRotation && options.coarseStepDeg > 0
+                                ? int(std::lround(options.maxRotationDeg / options.coarseStepDeg))
+                                : 0;
+    const double coarseStep = options.coarseStepDeg * kDegToRad;
+    const int m = int(starts.size());
+    std::vector<double> bestCost(m, kInf), bestAngle(m, 0.0);
 
-    double TercomMatching::IDW(const INSData& insData, size_t K) const
-    {
-        // 1) Build query point & squared radius
-        double queryPt[2] = { insData.x, insData.y };
-        double r          = insData.sigma * 3;
-        double r2         = r * r;
-
-        // 2) Radius search into a vector of ResultItem
-        std::vector<nanoflann::ResultItem<size_t,double>> matches;
-        matches.reserve(K);
-        nanoflann::SearchParameters params;  // <— use SearchParameters, not SearchParams
-        kdtree->radiusSearch(
-            /*query*/    &queryPt[0],
-            /*radius²*/  r2,
-            /*output*/   matches,
-            /*options*/  params
-            );
-
-        // 3) If empty, fall back to 1-NN
-        if (matches.empty()) {
-            std::vector<size_t> idx(1);
-            std::vector<double> dist2(1);
-            nanoflann::KNNResultSet<double> knnRS(1);
-            knnRS.init(idx.data(), dist2.data());
-            kdtree->findNeighbors(knnRS, &queryPt[0], params);
-            return base[idx[0]].magnetic;
-        }
-
-        // 4) Keep only the K closest
-        if (matches.size() > K) {
-            std::nth_element(
-                matches.begin(), matches.begin()+K, matches.end(),
-                [](auto &a, auto &b){ return a.second < b.second; }
-                );
-            matches.resize(K);
-        }
-
-        // 5) Inverse-distance weighted interpolation
-        double sumW = 0, sumM = 0;
-        for (auto &it : matches) {
-            double d = std::sqrt(it.second);
-            if (d < 1e-6)
-                return base[it.first].magnetic;
-            double w = 1.0/d;
-            sumW += w;
-            sumM += base[it.first].magnetic * w;
-        }
-        return sumW>0 ? sumM/sumW : 0.0;
-    }
-
-	SinglePoint TercomMatching::rotatePoint(const SinglePoint& point, double angle, const SinglePoint& center) const
-	{
-		// Rotate a point around a center by a given angle
-		double s = sin(angle);
-		double c = cos(angle);
-
-		// Translate point back to origin
-		double x = point.X - center.X;
-		double y = point.Y - center.Y;
-
-		// Rotate point
-		double xNew = x * c - y * s;
-		double yNew = x * s + y * c;
-
-		// Translate point back
-		SinglePoint rotatedPoint = point;
-		rotatedPoint.X = xNew + center.X;
-		rotatedPoint.Y = yNew + center.Y;
-
-		return rotatedPoint;
-	}
-
-    double TercomMatching::calculateMSD(const std::vector<INSData> track, const std::vector<INSData> insdata) const
-	{
-		// Calculate the mean square deviation between two tracks
-		double sum = 0;
-		for (int i = 0; i < track.size(); i++)
-		{
-            double dt = track[i].magnetic - insdata[i].magnetic;
-            sum += dt * dt;
-		}
-		return sum / track.size();
-	}
-
-    Datapoint TercomMatching::matchWithAdaptiveRotation()
-    {
-        if (insData.empty()) {
-            error_str += "错误: INS数据为空，无法进行TERCOM匹配!\n";
-            qWarning() << "matchWithAdaptiveRotation: insData is empty, aborting";
-            return Datapoint();
-        }
-        // ————— 准备工作 —————
-        const double stepSize     = 0.5 * M_PI / 180.0;
-        const double maxAngle     = 10  * M_PI / 180.0;
-        const double fineStepSize = stepSize / 10.0;
-        const double sigma3       = insData[0].sigma * 3.0;
-        const int    maxIter      = 50;  // 定义最大迭代次数
-
-        std::vector<INSData> bestTrack;
-        double minMSD = std::numeric_limits<double>::infinity();
-
-        // ————— 核心匹配循环 —————
-        for (const auto& m : base) {
-            // 1) 只处理在 sigma3 范围内的起点
-            if (calculateDistance(insData[0], m) > sigma3) continue;
-
-            // 2) 平移 INS 轨迹并做一次 IDW 插值
-            std::vector<INSData> alterTrack;
-            alterTrack.reserve(insData.size());
-            double dx = insData[0].x - m.x;
-            double dy = insData[0].y - m.y;
-            for (const auto& ins : insData) {
-                INSData tmp = ins;
-                tmp.x -= dx;
-                tmp.y -= dy;
-                tmp.magnetic = IDW(tmp);
-                alterTrack.push_back(tmp);
+#pragma omp parallel for schedule(dynamic, 4)
+    for (int k = 0; k < m; ++k) {
+        if (cancelled(cancel))
+            continue;
+        const MapPoint &start = pts[starts[k]];
+        for (int a = -coarseSteps; a <= coarseSteps; ++a) {
+            const double angle = a * coarseStep;
+            const double v = cost(start.x, start.y, angle, bestCost[k]);
+            if (v < bestCost[k]) {
+                bestCost[k] = v;
+                bestAngle[k] = angle;
             }
+        }
+    }
+    if (cancelled(cancel)) {
+        result.error = QStringLiteral("已取消");
+        return result;
+    }
 
-            // 3) 粗搜索初始角度
-            double bestAngle = 0.0;
-            for (double ang = -maxAngle; ang <= maxAngle; ang += stepSize) {
-                auto rotTrack = rotateTrack(alterTrack, ang, referencePoint);
-                auto cand     = tercomMatch(rotTrack);
-                double msd    = calculateMSD(cand, insData);
-                if (msd < minMSD) {
-                    minMSD    = msd;
-                    bestTrack = std::move(cand);
-                    bestAngle = ang;
-                }
-            }
-
-            // 4) 细化搜索
-            for (int iter = 0; iter < maxIter; ++iter) {
+    // ---- fine search around the heading of the best few candidates
+    std::vector<int> order(m);
+    for (int k = 0; k < m; ++k)
+        order[k] = k;
+    std::sort(order.begin(), order.end(), [&](int a, int b) {
+        return bestCost[a] < bestCost[b] || (bestCost[a] == bestCost[b] && a < b);
+    });
+    if (coarseSteps > 0 && options.fineStepDeg > 0) {
+        const int refine = std::min(m, std::max(1, options.refinedCandidates));
+        const int fineSteps = std::max(1, int(std::lround(options.coarseStepDeg / options.fineStepDeg)));
+        const double fineStep = options.fineStepDeg * kDegToRad;
+#pragma omp parallel for schedule(dynamic, 1)
+        for (int r = 0; r < refine; ++r) {
+            const int k = order[r];
+            const MapPoint &start = pts[starts[k]];
+            for (int round = 0; round < options.maxRefineRounds && !cancelled(cancel); ++round) {
+                const double centre = bestAngle[k];
                 bool improved = false;
-                for (double ang = bestAngle - stepSize; ang <= bestAngle + stepSize; ang += fineStepSize) {
-                    auto rotTrack = rotateTrack(alterTrack, ang, referencePoint);
-                    auto cand     = tercomMatch(rotTrack);
-                    double msd    = calculateMSD(cand, insData);
-                    if (msd < minMSD) {
-                        minMSD    = msd;
-                        bestTrack = std::move(cand);
-                        bestAngle = ang;
-                        improved  = true;
+                for (int f = -fineSteps; f <= fineSteps; ++f) {
+                    if (f == 0)
+                        continue;
+                    const double angle = centre + f * fineStep;
+                    const double v = cost(start.x, start.y, angle, bestCost[k]);
+                    if (v < bestCost[k]) {
+                        bestCost[k] = v;
+                        bestAngle[k] = angle;
+                        improved = true;
                     }
                 }
-                if (!improved) break;  // 如果没有任何角度能改进，就提前退出
+                if (!improved)
+                    break;
             }
         }
-
-        // ————— 填充并返回 Datapoint（map） —————
-        Datapoint result;
-        result.clear();
-        for (size_t i = 0; i < bestTrack.size(); ++i) {
-            SinglePoint p;
-            p.X = bestTrack[i].x;
-            p.Y = bestTrack[i].y;
-            p.tMagnetic = bestTrack[i].magnetic;
-            result[static_cast<int>(i)] = p;  // map 的 operator[] 会插入或更新
-        }
+        std::sort(order.begin(), order.begin() + refine, [&](int a, int b) {
+            return bestCost[a] < bestCost[b] || (bestCost[a] == bestCost[b] && a < b);
+        });
+    }
+    if (cancelled(cancel)) {
+        result.error = QStringLiteral("已取消");
         return result;
     }
 
-        std::vector<INSData> TercomMatching::rotateTrack(const std::vector<INSData> &track, double angle, const SinglePoint &center) const
-    {
-        std::vector<INSData> result;
-        for (const auto &point : track) {
-            INSData rotatedPoint = point;
-            SinglePoint sp;
-            sp.X = point.x;
-            sp.Y = point.y;
-            auto rotatedSP = rotatePoint(sp, angle, center);
-            rotatedPoint.x = rotatedSP.X;
-            rotatedPoint.y = rotatedSP.Y;
-            result.push_back(rotatedPoint);
-        }
-        return result;
+    // ---- the winner, with its full track
+    const int best = order[0];
+    const MapPoint &start = pts[starts[best]];
+    const double angle = bestAngle[best];
+    const double c = std::cos(angle), s = std::sin(angle);
+    result.positions.reserve(n);
+    result.mapValues.reserve(n);
+    for (int i = 0; i < n; ++i) {
+        const double x = start.x + c * relX[i] - s * relY[i];
+        const double y = start.y + s * relX[i] + c * relY[i];
+        result.positions.append(QPointF(x, y));
+        result.mapValues.append(interpolate(x, y, options));
     }
-
-        std::vector<INSData> TercomMatching::tercomMatch(const std::vector<INSData> &rotatedTrack) const
-    {
-        std::vector<INSData> matchTrack;
-        for (const auto& elem : rotatedTrack) {
-            INSData match = elem;
-            match.magnetic = IDW(elem, 10);
-            matchTrack.push_back(match);
-        }
-        return matchTrack;
-    }
-
-	Datapoint TercomMatching::match()
-	{
-        Datapoint result;
-        result.clear();
-
-        if (insData.empty()) {
-            error_str += "错误: INS数据为空，无法进行TERCOM匹配!\n";
-            qWarning() << "match: insData is empty, aborting";
-            return Datapoint();
-        }
-
-        // 阈值：3σ
-        const double sigma3 = insData[0].sigma * 3.0;
-
-        // 1) 构造所有平移并做 IDW 的轨迹集合
-        std::vector<std::vector<INSData>> alterTracks;
-        alterTracks.reserve(base.size());
-        for (const auto& m : base) {
-            // 只处理起点在 3σ 范围内的基准点
-            if (calculateDistance(insData[0], m) >= sigma3)
-                continue;
-
-            // 平移 INS 轨迹并做一次 IDW
-            std::vector<INSData> alterTrack;
-            alterTrack.reserve(insData.size());
-            double dx = insData[0].x - m.x;
-            double dy = insData[0].y - m.y;
-            for (const auto& ins : insData) {
-                INSData tmp = ins;
-                tmp.x -= dx;
-                tmp.y -= dy;
-                // 调用新 IDW 接口，不再传 base
-                tmp.magnetic = IDW(tmp);
-                alterTrack.push_back(tmp);
-            }
-            alterTracks.push_back(std::move(alterTrack));
-        }
-
-        // 2) 在所有 alterTracks 中选出 MSD 最小的那条
-        double minMSD = std::numeric_limits<double>::infinity();
-        std::vector<INSData> bestTrack;
-        for (auto& track : alterTracks) {
-            double msd = calculateMSD(track, insData);
-            if (msd < minMSD) {
-                minMSD    = msd;
-                bestTrack = std::move(track);
-            }
-        }
-
-        // 3) 把 bestTrack 转成 Datapoint（map），键从 0,1,2,… 开始
-        for (size_t i = 0; i < bestTrack.size(); ++i) {
-            SinglePoint p;
-            p.X = bestTrack[i].x;
-            p.Y = bestTrack[i].y;
-            p.Z = bestTrack[i].magnetic;
-            result[static_cast<int>(i)] = p;
-        }
-
-        return result;
-	}
-
-    void TercomMatching::drawResult(Datapoint matchResult)
-    {
-        if (base.empty()) {
-            qWarning() << "drawResult: base 为空，无法绘制热力图";
-            return;
-        }
-        // 创建QCustomPlot对象
-            customPlot = new QCustomPlot;
-            // 设置窗口大小
-            customPlot->resize(800, 600);
-
-            // 设置图例
-            customPlot->legend->setVisible(true);
-            QFont legendFont = customPlot->font();
-            legendFont.setPointSize(10);
-            customPlot->legend->setFont(legendFont);
-            customPlot->legend->setBrush(QBrush(QColor(255, 255, 255, 230)));
-            customPlot->axisRect()->insetLayout()->setInsetAlignment(0,Qt::AlignLeft|Qt::AlignTop);
-
-            // 设置轴标签
-            customPlot->xAxis->setLabel("X Axis");
-            customPlot->yAxis->setLabel("Y Axis");
-
-            // 找出背景数据的范围
-            QVector<double> tm,x,y;
-            double minX = base[0].x;
-            double maxX = base[0].x;
-            double minY = base[0].y;
-            double maxY = base[0].y;
-            for(auto tmp = base.begin(); tmp != base.end(); tmp++)
-            {
-                if (tmp->x<minX)
-                    minX = tmp->x;
-                if (tmp->x>maxX)
-                    maxX = tmp->x;
-                if (tmp->y<minY)
-                    minY = tmp->y;
-                if (tmp->x>maxY)
-                    maxY = tmp->y;
-                tm.push_back(tmp->magnetic);
-                x.push_back(tmp->x);
-                y.push_back(tmp->y);
-            }
-            // 创建热力图数据结构
-            int nx = maxX/x_step; // x方向上的点数
-            int ny = maxY/y_step; // y方向上的点数
-            QCPColorMap* colorMap = new QCPColorMap(customPlot->xAxis, customPlot->yAxis);
-            colorMap->data()->setSize(nx, ny); // 设置数据大小
-            colorMap->data()->setRange(QCPRange(minX, maxX), QCPRange(minY, maxY)); // 设置数据范围
-
-            for (int X = 0; X < nx; ++X)
-               {
-                   for (int Y = 0; Y < ny; ++Y)
-                   {
-                       double lon = minX + X * (maxX - minX) / (nx - 1);
-                       double lat = minY + Y * (maxY - minY) / (ny - 1);
-
-                       // 简单的最近邻插值
-                       double tMagnetic = 0;
-                       double minDist = std::numeric_limits<double>::max();
-                       for (int i = 0; i < x.size(); ++i)
-                       {
-                           double dist = std::sqrt(std::pow(x[i] - lon, 2) + std::pow(y[i] - lat, 2));
-                           if (dist < minDist)
-                           {
-                               minDist = dist;
-                               tMagnetic = tm[i];
-                           }
-                       }
-                       colorMap->data()->setCell(X, Y, tMagnetic);
-                   }
-               }
-
-            // 添加颜色条
-            QCPColorScale *colorScale = new QCPColorScale(customPlot);
-            customPlot->plotLayout()->addElement(0, 1, colorScale);
-            colorMap->setColorScale(colorScale);
-            colorScale->setDataRange(QCPRange(*std::min_element(tm.constBegin(), tm.constEnd()), *std::max_element(tm.constBegin(), tm.constEnd())));
-            colorScale->setGradient(QCPColorGradient::gpJet);
-            // 添加等值线
-            colorMap->rescaleDataRange();
-
-            // 绘制REAL数据点
-            QVector<double> xReal, yReal;
-            for (auto &p : truePath) { xReal<<p.x; yReal<<p.y; }
-            customPlot->addGraph();
-            customPlot->graph(0)->setName("Real Points");
-            customPlot->graph(0)->setPen(QPen(Qt::red)); // 设置红色
-            customPlot->graph(0)->setLineStyle(QCPGraph::lsNone);
-            customPlot->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, 4));
-            customPlot->graph(0)->setData(xReal, yReal);
-
-            // 绘制X数据点
-            QVector<double> xX, yX;
-            for (const auto& pair : matchResult) {
-                xX.append(pair.second.X);
-                yX.append(pair.second.Y);
-            }
-            customPlot->addGraph();
-            customPlot->graph(1)->setName("matched Points");
-            customPlot->graph(1)->setPen(QPen(Qt::blue)); // 设置绿色
-            customPlot->graph(1)->setLineStyle(QCPGraph::lsNone);
-            customPlot->graph(1)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssPlus, 4));
-            customPlot->graph(1)->setData(xX, yX);
-
-            //        // 绘制ins数据点
-            QVector<double> xins, yins;
-            for(const auto& point : insData) {
-                xins.append(point.x);
-                yins.append(point.y);
-            }
-            customPlot->addGraph();
-            customPlot->graph(2)->setName("Original INS Points");
-            customPlot->graph(2)->setPen(QPen(Qt::black));
-            customPlot->graph(2)->setLineStyle(QCPGraph::lsNone);
-            customPlot->graph(2)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssPlus, 4));
-            customPlot->graph(2)->setData(xins, yins);
-
-            // 自动缩放为显示所有内容
-            for (int i = 0; i < customPlot->graphCount(); ++i)
-                customPlot->graph(i)->rescaleAxes(true);
-            customPlot->replot();
-
-            // 显示窗口
-    //        customPlot->show();
-    //        return customPlot;
-
-    }
-
+    result.msd = bestCost[best] / n;
+    result.rotationDeg = angle / kDegToRad;
+    result.shift = QPointF(start.x - startX, start.y - startY);
+    return result;
 }
+
+} // namespace Nav

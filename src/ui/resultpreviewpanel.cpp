@@ -12,7 +12,8 @@
 #include <QVariant>
 
 ResultPreviewPanel::ResultPreviewPanel(const QList<QWidget *> &pages, QTextBrowser *log, QWidget *parent)
-    : QWidget(parent), pages_(pages), log_(log)
+    : QWidget(parent), pages_(pages), log_(log), emptyTitle_(tr("尚无预览")),
+      emptyHint_(tr("设置左侧参数并开始处理后，热力图与等值线会显示在这里"))
 {
     setObjectName("resultPreview");
     setAttribute(Qt::WA_StyledBackground, true);
@@ -76,7 +77,14 @@ void ResultPreviewPanel::restyle()
         "QTextBrowser { background: %1; color: %2; border: 1px solid %3; border-radius: 6px; padding: 4px 8px;"
         " font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace; font-size: 9pt; }")
                             .arg(tm.hex("logBg"), tm.hex("t2"), tm.hex("line")));
-    empty_->setText(QStringLiteral("<div style='font-size:9.75pt; font-weight:600; color:%1;'>尚无预览</div>"
-                                   "<div style='font-size:9pt; color:%2;'>设置左侧参数并开始处理后，热力图与等值线会显示在这里</div>")
-                        .arg(tm.hex("t2"), tm.hex("t3")));
+    empty_->setText(QStringLiteral("<div style='font-size:9.75pt; font-weight:600; color:%1;'>%3</div>"
+                                   "<div style='font-size:9pt; color:%2;'>%4</div>")
+                        .arg(tm.hex("t2"), tm.hex("t3"), emptyTitle_.toHtmlEscaped(), emptyHint_.toHtmlEscaped()));
+}
+
+void ResultPreviewPanel::setEmptyText(const QString &title, const QString &hint)
+{
+    emptyTitle_ = title;
+    emptyHint_ = hint;
+    restyle();
 }

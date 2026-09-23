@@ -87,10 +87,11 @@ SOURCES += \
     src/app/main.cpp \
     src/app/mainwindow.cpp \
     src/app/myopenglwidget.cpp \
-    src/navigation/autonav.cpp \
-    src/navigation/function.cpp \
     src/navigation/iccp.cpp \
-    src/navigation/inputpathform.cpp \
+    src/navigation/navdata.cpp \
+    src/navigation/navigationform.cpp \
+    src/navigation/navigationrunner.cpp \
+    src/navigation/navplot.cpp \
     src/navigation/sitan.cpp \
     src/navigation/tercom.cpp \
     src/app/project.cpp \
@@ -189,10 +190,11 @@ HEADERS += \
     src/app/mainwindow.h \
     src/app/myopenglwidget.h \
     third_party/nanoflann.hpp \
-    src/navigation/autonav.h \
-    src/navigation/function.h \
     src/navigation/iccp.h \
-    src/navigation/inputpathform.h \
+    src/navigation/navdata.h \
+    src/navigation/navigationform.h \
+    src/navigation/navigationrunner.h \
+    src/navigation/navplot.h \
     src/navigation/sitan.h \
     src/navigation/tercom.h \
     src/app/project.h \
@@ -240,7 +242,6 @@ FORMS += \
     src/app/help.ui \
     src/app/importform.ui \
     src/app/mainwindow.ui \
-    src/navigation/inputpathform.ui \
     src/referencemap/globalmodel/autoreferencemap.ui \
     src/referencemap/globalmodel/mapTaylorLegendreform.ui \
     src/referencemap/globalmodel/mapcompressform.ui \

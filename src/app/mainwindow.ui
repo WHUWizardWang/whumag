@@ -369,21 +369,6 @@
     <string>向下延拓</string>
    </property>
   </action>
-  <action name="actionTERCOM">
-   <property name="text">
-    <string>TERCOM</string>
-   </property>
-  </action>
-  <action name="actionICCP">
-   <property name="text">
-    <string>ICCP</string>
-   </property>
-  </action>
-  <action name="actionSITAN">
-   <property name="text">
-    <string>SITAN</string>
-   </property>
-  </action>
   <action name="action_subarea2">
    <property name="text">
     <string>分区</string>
@@ -434,11 +419,6 @@
     <string>数据库</string>
    </property>
   </action>
-  <action name="action_navPara">
-   <property name="text">
-    <string>设置参数</string>
-   </property>
-  </action>
   <action name="action_readlines">
    <property name="text">
     <string>导入多条测线</string>
@@ -462,11 +442,6 @@
   <action name="action_suball">
    <property name="text">
     <string>一键处理</string>
-   </property>
-  </action>
-  <action name="action_TERCOM_ICCP">
-   <property name="text">
-    <string>TERCOM-ICCP</string>
    </property>
   </action>
   <action name="action_nav">

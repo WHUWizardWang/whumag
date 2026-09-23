@@ -1,90 +1,49 @@
-#pragma once
-#ifndef _SITAN_H_
-#define _SITAN_H_
+#ifndef NAV_SITAN_H
+#define NAV_SITAN_H
 
-#include <iostream>
-#include "DataStruct.h"
-#include "mainwindow.h"
-#include "tercom.h"
-#include "function.h"
+#include "navdata.h"
 
-namespace Geomagnetic {
+#include <atomic>
 
-/// 卡尔曼滤波器：用于将磁测量值与背景场梯度模型结合，修正惯导漂移
-class KalmanFilter
+namespace Nav {
+
+struct SitanOptions
 {
-public:
-    /// 构造：传入背景场格网
-    KalmanFilter() = default;
-    explicit KalmanFilter(const QVector<QVector<double>>& backgroundField);
-
-    /// 初始化状态向量 x（例如位置误差和偏航角误差等）
-    void init(const VectorXd& initialState);
-
-    /// 预测步骤：根据 controlInput（控制输入，例如上一次位置）
-    void predict(const VectorXd& controlInput);
-
-    /// 更新步骤：输入最新测量值 measurement 与控制输入，返回更新后的状态
-    VectorXd update(double measurement, const VectorXd& controlInput);
-
-private:
-    MatrixXd       P;  ///< 状态协方差矩阵
-    VectorXd       x;  ///< 状态向量
-    MatrixXd       F;  ///< 状态转移矩阵
-    RowVector2d    H;  ///< 观测矩阵，将状态映射到测量值
-    MatrixXd       R;  ///< 测量噪声协方差
-    MatrixXd       Q;  ///< 过程噪声协方差
-
-    QVector<QVector<double>> background;
-    /// 在当前位置 currentCoordinates 周围做局部拟合，计算背景场基准值 c 及梯度 a、b
-    void getGeomagneticIntensity(const Vector2d& currentCoordinates,
-                                 const QVector<QVector<double>>& backgroundField,
-                                 double& a, double& b, double& c);
+    // Defaults chosen on the sample data and two synthetic sets (SITAN refines a TERCOM result).
+    double initialPositionSigma = 0.5;   // uncertainty of the input track at its start (map units)
+    double processNoise = 0.05;          // growth of the position error per step (map units)
+    double measurementSigma = 4.0;       // magnetic measurement + map / interpolation error (field units)
+    double innovationClamp = 3.0;        // innovations larger than this many sigma are clipped (outliers)
+    int fitHalfWidth = 2;                // local plane fit over (2 * half + 1)^2 grid nodes
 };
 
-/// SITAN 匹配导航主类
-class SitanMatching
+struct SitanResult
 {
-public:
-    /// 默认构造
-    SitanMatching();
-
-    ~SitanMatching() {
-        delete customPlot;
-    }
-
-    /// 读取背景场格网：返回二维矩阵 [i][j] 对应 (x_i, y_j) 位置的磁场值
-    QVector<QVector<double>> ReadBackground(const QString& filePath);
-
-    /// 读取 INS 观测数据，返回 INSData 列表
-    QVector<INSData> ReadINS(const QString& filePath);
-
-    /// 将点集 p 写入文本文件 file，格式：x,y
-    void totxt(const QVector<QPointF>& p, const QString& file);
-
-    /// 将计算结果可视化：绘制背景热力图、真实轨迹、SITAN 匹配轨迹及 INS 轨迹
-    void drawResult(const QVector<QPointF>& X,
-                    const QVector<QVector<double>>& matrix,
-                    const QVector<QPointF>& Real,
-                    const QString& backgroundFile,
-                    const QVector<INSData>& insdata);
-
-    /// 主流程 3：直接传入背景矩阵和 INS 数据，返回匹配后的坐标序列
-    QVector<QPointF> SITANAlgorithm(const QVector<QVector<double>>& background,
-                                    const QVector<INSData>& insdata);
-
-    QCustomPlot* customPlot = nullptr;  ///< 绘图库句柄，drawResult 中创建
-    QVector<QVector<double>>   background;  ///< 原始背景场格网
-private:
-    KalmanFilter               kf;          ///< 内部卡尔曼滤波器
-    double                     xmin = 0;    ///< 背景场 X 方向最小值
-    double                     xmax = 0;    ///< 背景场 X 方向最大值
-    double                     ymin = 0;    ///< 背景场 Y 方向最小值
-    double                     ymax = 0;    ///< 背景场 Y 方向最大值
-    QVector<double>            x_bg, y_bg, z_bg;  ///< 原始背景场采样点，用于备用
-
-    // 你可以在此处继续添加私有辅助方法和成员
+    QString error;          // empty on success
+    Path positions;         // corrected track, one point per input point
+    int skippedUpdates = 0; // steps without a usable local gradient (near holes / outside the map)
+    bool ok() const { return error.isEmpty(); }
 };
 
-}
-#endif // !_SITAN_H_
+// SITAN (Sandia inertial terrain-aided navigation) on a magnetic background: an extended Kalman
+// filter estimates the position offset of the input track.  At each point the background is
+// linearised by a local plane fit; the difference between the measured value and the plane value
+// at the current estimate corrects the offset along the gradient.
+class SitanMatcher
+{
+public:
+    explicit SitanMatcher(const GridField &grid);
+
+    SitanResult match(const Track &track, const SitanOptions &options, const std::atomic_bool *cancel = nullptr) const;
+
+private:
+    // Plane through the nodes around (x, y): value and gradient at (x, y).  False when there are
+    // not enough valid nodes nearby.
+    bool linearise(double x, double y, int halfWidth, double *value, double *gradX, double *gradY) const;
+
+    GridField grid_;
+};
+
+} // namespace Nav
+
+#endif // NAV_SITAN_H

@@ -38,3 +38,20 @@
 `WHUMAG_TEST_GRAB=<目录>`，程序会把每个可见的顶层窗口保存为 PNG 后退出；`WHUMAG_TEST_PROJECT`、
 `WHUMAG_TEST_QUERY`、`WHUMAG_TEST_SHOW` 等变量用来打开工程、查询窗口或指定窗体，详见该文件的注释。
 正常发布构建不要带这个宏。
+
+## 匹配导航
+
+代码在 `src/navigation`：`navdata`（数据类型、背景场格网、文件读写、精度）、`tercom` / `iccp` / `sitan`
+（三种算法，不依赖界面）、`navigationrunner`（按所选方法串联算法并保存结果，在后台线程运行）、`navplot`（结果图）、
+`navigationform`（窗口）。
+
+输入文件每行一条记录，字段可用空格、制表符、逗号或分号分隔，空行、`#` 注释和表头会跳过：
+
+| 文件 | 内容 |
+| --- | --- |
+| 背景场 | `x y 磁场值` |
+| INS 航迹 | `x y 实测磁场值`（其后的列忽略） |
+| 真实航迹（可选） | `x y`，与 INS 航迹逐点对应，只用于计算精度 |
+
+结果写到窗口里选择的输出文件夹：`<方法>_match.txt`（每行 `x,y,实测磁场值`）、`navigation_accuracy.txt`
+（各方法相对真实航迹的均方根误差）和结果图 `<方法>.png`。

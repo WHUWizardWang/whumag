@@ -16,7 +16,7 @@ MainWindow::MainWindow(QWidget *parent)
     , query_form_ano_(new AnoQueryForm)
     , merge_from_(new mergeForm())
     , database_form(new database())
-    , navPara_form_(new InputPathForm())
+    , navigation_form_(new NavigationForm())
     , geomag_proj_(new GeoMagnetismProject())
     , referenceMap_form_(new ReferenceMap())
     , autoReferenceMap_form_(new AutoReferenceMap())
@@ -63,7 +63,7 @@ MainWindow::~MainWindow()
     delete queryDialog_;   // 同时释放它承载的两个查询窗体
     delete geomag_proj_;
     delete database_form;
-    delete navPara_form_;
+    delete navigation_form_;
     delete referenceMap_form_;
     delete autoReferenceMap_form_;
     delete ui;
@@ -1165,106 +1165,6 @@ void MainWindow::on_action_evaluate_triggered()
             });
 }
 
-void MainWindow::on_action_navPara_triggered()
-{
-    navPara_form_->show();
-}
-
-void MainWindow::on_actionTERCOM_triggered()
-{
-    if(navPara_form_->backGFile.isEmpty() ||
-       navPara_form_->INSFile.isEmpty() ||
-       navPara_form_->realFile.isEmpty())
-    {
-        QMessageBox::warning(this,"警告","请确认选择文件!");
-        return;
-    }
-    // 设置背景图的分辨率，根据out.txt
-    ui->textBrowser->append("TERCOM匹配导航计算开始...");
-    QCoreApplication::processEvents();
-    Geomagnetic::TercomMatching tm;
-    tm.ReadBackground(navPara_form_->backGFile);
-    tm.ReadINS(navPara_form_->INSFile);
-    tm.ReadTruePath(navPara_form_->realFile);
-    Geomagnetic::Datapoint result = tm.matchWithAdaptiveRotation();
-    ui->textBrowser->append("TERCOM匹配导航计算完毕!");
-    ui->textBrowser->append("等待绘图...");
-    QCoreApplication::processEvents();
-    tm.drawResult(result);
-    //
-    QFile file("/home/greatwall/build-whumag-desktop-Debug/tercom_out.txt");
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        // 如果文件打开失败，输出错误信息
-        qWarning() << "fail" << file;
-    }
-    QTextStream out(&file);
-    for (auto& point : result)
-    {
-        out << point.second.X<< "," << point.second.Y << Qt::endl;
-    }
-    file.close();
-//    ui->textBrowser->append("TERCOM匹配导航RMS: "+QString::number(my.finalRMS) + " km");
-    QCoreApplication::processEvents();
-}
-
-void MainWindow::on_actionICCP_triggered()
-{
-}
-
-void MainWindow::on_actionSITAN_triggered()
-{
-    QMessageBox::warning(this,"警告","请确认选择文件1!");
-    if(navPara_form_->backGFile.isEmpty() ||
-       navPara_form_->INSFile.isEmpty() ||
-       navPara_form_->realFile.isEmpty())
-    {
-        QMessageBox::warning(this,"警告","请确认选择文件!");
-        return;
-    }
-    // 设置背景图的分辨率，根据out.txt
-    ui->textBrowser->append("SITAN匹配导航计算开始...");
-    QCoreApplication::processEvents();
-}
-
-void MainWindow::on_action_TERCOM_ICCP_triggered()
-{
-    if(navPara_form_->backGFile.isEmpty() ||
-       navPara_form_->INSFile.isEmpty() ||
-       navPara_form_->realFile.isEmpty())
-    {
-        QMessageBox::warning(this,"警告","请确认选择文件!");
-        return;
-    }
-    // 设置背景图的分辨率，根据out.txt
-    ui->textBrowser->append("TERCOM与ICCP联合匹配导航计算开始...");
-    QCoreApplication::processEvents();
-    Geomagnetic::TercomMatching tm;
-    tm.ReadBackground(navPara_form_->backGFile);
-    tm.ReadINS(navPara_form_->INSFile);
-    tm.ReadTruePath(navPara_form_->realFile);
-    Geomagnetic::Datapoint result = tm.matchWithAdaptiveRotation();
-    QFile file(QDir::currentPath()+"/tercom_ins.csv");
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qWarning() << "fail" << file;
-    }
-    QTextStream out(&file);
-    for (int i = 0;i<result.size();i++)
-    {
-        out << result.at(i).X <<"," <<result.at(i).Y << ","<< tm.insData.at(i).magnetic<<Qt::endl;
-    }
-    file.close();
-    // ICCP
-    ICCP my;
-    // 设置背景图的分辨率，根据out.txt
-    QVector<QPointF> X = my.cal(navPara_form_->backGFile,
-                                navPara_form_->INSFile,
-                                QDir::currentPath()+"/tercom_ins.csv",
-                                navPara_form_->realFile,0.001);
-    ui->textBrowser->append("ICCP匹配导航计算完毕!");
-    QCoreApplication::processEvents();
-    QCoreApplication::processEvents();
-}
-
 void MainWindow::on_action_suball_triggered()
 {
     QDialog dialog;
@@ -1758,8 +1658,10 @@ void MainWindow::on_action_globalmodel_triggered()
 
 void MainWindow::on_action_nav_triggered()
 {
-    navPara_form_->setWindowState(Qt::WindowMaximized);
-    navPara_form_->show();
+    navigation_form_->setWindowState(Qt::WindowMaximized);
+    navigation_form_->show();
+    navigation_form_->raise();
+    navigation_form_->activateWindow();
 }
 QString findManualFile()
 {

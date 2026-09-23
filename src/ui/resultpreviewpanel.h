@@ -23,6 +23,9 @@ public:
     // Shows the "尚无预览" hint unless one of the (visible) pages already holds a result.
     void refreshEmptyState();
 
+    // Text of that hint (the default talks about heat maps and contours).
+    void setEmptyText(const QString &title, const QString &hint);
+
 private:
     void restyle();
 
@@ -30,6 +33,8 @@ private:
     QTextBrowser *log_;
     Chip *chip_;
     QLabel *empty_;
+    QString emptyTitle_;
+    QString emptyHint_;
 };
 
 #endif // RESULTPREVIEWPANEL_H

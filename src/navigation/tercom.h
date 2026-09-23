@@ -1,76 +1,67 @@
-#pragma once
-#ifndef _MATCHINGNAVIGATION_H_
-#define _MATCHINGNAVIGATION_H_
+#ifndef NAV_TERCOM_H
+#define NAV_TERCOM_H
 
-#include<iostream>
-#include <QString>
-#include <QVector>
-#include <QFile>
-#include <QDebug>
-#include <QTextStream>
-#include <QVector>
-#include "DataStruct.h"
-#include "function.h"
-#include "qcustomplot.h"
-#include "utils.h"
-#include "referencemap/KDTree.h"
-using namespace nanoflann;
-namespace Geomagnetic {
-    struct MapData {
-        double x, y, magnetic;
-    };
+#include "navdata.h"
 
-    struct INSData {
-        //坐标 x,y,航向角heading,磁场强度magnetic
-        double x, y, heading, magnetic;
-        //中误差sigma
-        double sigma=3;
-    };
+#include <atomic>
+#include <memory>
 
-    struct TruePath {
-        double x, y;
-    };
-	class TercomMatching
-	{
-    public:
+namespace Nav {
 
-        TercomMatching(double x_step , double y_step)
-            : x_step(x_step), y_step(y_step) {};
-        TercomMatching();
-        Datapoint match();
-        int ReadBackground(const QString &filePath);
-        void ReadINS(const QString &filePath);
-        void ReadTruePath(const QString &filePath);
-        void setReferencePoint(const SinglePoint& refPoint);
-        Datapoint matchWithAdaptiveRotation();
-        void saveResult(const QString &filePath,const Datapoint &result);
-        void drawResult(Datapoint matchResult);
-        ~TercomMatching() {};
+struct TercomOptions
+{
+    // Start positions tried: every background sample within this distance of the INS start.
+    double searchRadius = 9.0;
+    // Map value at an arbitrary position: inverse-distance weighting of the nearest
+    // |idwNeighbours| samples within |idwRadius| (the nearest sample when none is that close).
+    double idwRadius = 9.0;
+    int idwNeighbours = 10;
 
-        std::vector<TruePath> truePath;
-        std::vector<INSData> insData;
-        std::vector<MapData> base;
-        QCustomPlot* customPlot;
-        QString error_str;
-    private:
-        Datapoint data;
-        SinglePoint referencePoint;
-        double xg;
-        double yg;
-        double x_step;
-        double y_step;
-        PointCloud cloud;
-        std::unique_ptr<KDTree2D> kdtree;
+    // Heading search (on top of the translation search).  Off: translation only.
+    bool searchRotation = true;
+    double maxRotationDeg = 10.0;
+    double coarseStepDeg = 0.5;
+    double fineStepDeg = 0.05;
+    int refinedCandidates = 8;    // the best coarse candidates that get the fine search
+    int maxRefineRounds = 50;
+};
 
-        std::vector<INSData> rotateTrack(const std::vector<INSData> &track, double angle, const SinglePoint &center) const;
-        std::vector<INSData> tercomMatch(const std::vector<INSData> &rotatedTrack) const;
+struct TercomResult
+{
+    QString error;             // empty on success
+    Path positions;            // matched track
+    QVector<double> mapValues; // background value along the matched track
+    double msd = std::numeric_limits<double>::quiet_NaN();   // mean squared magnetic difference
+    double rotationDeg = 0;    // heading correction of the best match
+    QPointF shift;             // translation of the track start
+    int candidates = 0;        // start positions tried
+    bool ok() const { return error.isEmpty(); }
+};
 
-        // Helper functions
-        double calculateDistance(const INSData& insData, const MapData& base) const;
-        double IDW(const INSData& insData, size_t K = 10) const;
-        SinglePoint rotatePoint(const SinglePoint& point, double angle, const SinglePoint& center) const;
-        double calculateMSD(const std::vector<INSData> track, const std::vector<INSData> insdata) const;
+// TERCOM (terrain contour matching) on a magnetic background: moves - and optionally rotates -
+// the whole INS track so that the background values along it best agree with the measured values
+// (least mean squared difference).
+class TercomMatcher
+{
+public:
+    explicit TercomMatcher(const QVector<MapPoint> &map);
+    ~TercomMatcher();
+    TercomMatcher(const TercomMatcher &) = delete;
+    TercomMatcher &operator=(const TercomMatcher &) = delete;
 
-	};
-}
-#endif // !_MATCHINGNAVIGATION_H_
+    bool isEmpty() const;
+
+    // Background value at (x, y) by inverse-distance weighting.
+    double interpolate(double x, double y, const TercomOptions &options) const;
+
+    // |cancel| (optional) is polled; a cancelled run returns an error result.
+    TercomResult match(const Track &track, const TercomOptions &options, const std::atomic_bool *cancel = nullptr) const;
+
+private:
+    struct Index;
+    std::unique_ptr<Index> index_;
+};
+
+} // namespace Nav
+
+#endif // NAV_TERCOM_H

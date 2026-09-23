@@ -21,9 +21,6 @@
 #include "referencemap/inputpara_rm.h"
 #include "draw/draw_form.h"
 #include "dataprocessing/inputpara_dp.h"
-#include "navigation/iccp.h"
-#include "navigation/tercom.h"
-#include "navigation/sitan.h"
 #include "dataprocessing/extension.h"
 #include "dataprocessing/mergeform.h"
 #include "dataprocessing/Time_TongHua.h"
@@ -35,7 +32,7 @@
 #include "help.h"
 #include "realtime_redirector.h"
 #include "database/database.h"
-#include "navigation/inputpathform.h"
+#include "navigation/navigationform.h"
 #include "referencemap/globalmodel/referencemap.h"
 #include "referencemap/globalmodel/autoreferencemap.h"
 QT_BEGIN_NAMESPACE
@@ -97,10 +94,6 @@ private slots:
     void on_action_evaluate_triggered();                    // 数据处理：精度评估
     void on_action_merge_triggered();                       // 数据处理：数据融合
     void on_action_correct_triggered();                     // 数据处理：通化改正
-    void on_action_navPara_triggered();                     // 匹配导航：参数选择
-    void on_actionTERCOM_triggered();                       // 匹配导航：TERCOM
-    void on_actionICCP_triggered();                         // 匹配导航：ICCP
-    void on_actionSITAN_triggered();                        // 匹配导航：SITAN
     void on_actionjianhexian_triggered();                   // 精度评估：检核线1
     void on_actionjianhexian2_triggered();                  // 精度评估：检核线2
     void on_actionshow_triggered();                         // 显示：热力图和等值线图
@@ -115,7 +108,6 @@ private slots:
     int findIndexByString(const QString &targetString);
 
 
-    void on_action_TERCOM_ICCP_triggered();
 
     void on_action_nav_triggered();
 
@@ -166,7 +158,7 @@ private:
     DataQueryDialog     *queryDialog_ = nullptr;            // 数据查询窗口（承载上面两个查询窗体并拥有它们）
     mergeForm           *merge_from_;                       // 数据融合窗口
     database            *database_form;                     // 数据库窗口
-    InputPathForm       *navPara_form_;                     // 匹配导航路径选择
+    NavigationForm      *navigation_form_;                  // 匹配导航窗口
     ReferenceMap        *referenceMap_form_;                // 整取建模窗口
     AutoReferenceMap    *autoReferenceMap_form_;            // 自动建模窗口
 
