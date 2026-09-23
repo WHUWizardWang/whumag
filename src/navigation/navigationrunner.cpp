@@ -332,15 +332,14 @@ void Run::runMethods()
         }
         log(QStringLiteral("ICCP 精匹配（以 TERCOM 结果为初值）…"));
         stepTimer_.start();
-        IccpOptions options;
-        if (m == Method::TercomIccp)
-            options.toleranceCells2 = 4e-3;   // the start is already close
-        const IccpResult r = iccp.match(withPositions(ins_, start), options, cancel_);
+        // same convergence threshold as ICCP alone: a looser one stopped after a few iterations,
+        // well before convergence (sample data: 0.200 km instead of 0.087 km)
+        const IccpResult r = iccp.match(withPositions(ins_, start), IccpOptions(), cancel_);
         if (!r.ok()) {
             fail(QStringLiteral("ICCP "), r.error);
             return;
         }
-        log(QStringLiteral("    迭代 %1 次").arg(r.iterations));
+        log(QStringLiteral("    迭代 %1 次%2").arg(r.iterations).arg(r.converged ? QStringLiteral("，已收敛") : QStringLiteral("，达到迭代上限")));
         addTrack(QStringLiteral("tercom_iccp"), QStringLiteral("TERCOM + ICCP"), r.positions, stepTimer_.elapsed());
     }
 
