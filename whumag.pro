@@ -86,6 +86,9 @@ SOURCES += \
     src/app/geomagnetismproject.cpp \
     src/app/help.cpp \
     src/app/importform.cpp \
+    src/app/dataimportdialog.cpp \
+    src/dataio/binarytables.cpp \
+    src/dataio/tableimport.cpp \
     src/app/main.cpp \
     src/app/mainwindow.cpp \
     src/app/myopenglwidget.cpp \
@@ -191,6 +194,9 @@ HEADERS += \
     src/app/gmparameters.h \
     src/app/help.h \
     src/app/importform.h \
+    src/app/dataimportdialog.h \
+    src/dataio/binarytables.h \
+    src/dataio/tableimport.h \
     src/app/mainwindow.h \
     src/app/myopenglwidget.h \
     third_party/nanoflann.hpp \

@@ -10,6 +10,7 @@
 #include <QRadioButton>
 #include <QTreeWidget>
 #include "MagAno/anoqueryform.h"
+#include "dataimportdialog.h"
 #include "dataprocessing/continuation.h"
 #include "dataprocessing/lcurveplot.h"
 #include <QStandardItemModel>
@@ -188,6 +189,36 @@ void uiTestScheduleForMainWindow(QWidget *mainWindow)
             tabs->setWindowTitle(QStringLiteral("向下延拓"));
             tabs->resize(900, 620);
             tabs->show();
+        });
+    }
+    // WHUMAG_TEST_FORMAT=<data file> shows the format / column dialog for that file
+    const QString formatFile = qEnvironmentVariable("WHUMAG_TEST_FORMAT");
+    if (!formatFile.isEmpty()) {
+        QTimer::singleShot(700, mainWindow, [formatFile, mainWindow]() {
+            auto *dlg = new DataImportDialog(formatFile, DataIO::ImportSettings(), mainWindow);
+            dlg->setAttribute(Qt::WA_DeleteOnClose);
+            dlg->show();
+        });
+    }
+    // WHUMAG_TEST_IMPORT=<data file>|<name> runs the import form on that file (with a project open): the
+    // format dialog that opens is accepted with its automatic settings
+    const QStringList importArgs = qEnvironmentVariable("WHUMAG_TEST_IMPORT").split('|');
+    if (importArgs.size() == 2) {
+        QTimer::singleShot(1200, mainWindow, [mainWindow, importArgs]() {
+            QMetaObject::invokeMethod(mainWindow, "on_action_import_triggered", Qt::DirectConnection);
+            for (QWidget *w : QApplication::topLevelWidgets()) {
+                if (QString::fromLatin1(w->metaObject()->className()) != QLatin1String("ImportForm"))
+                    continue;
+                if (auto *path = w->findChild<QLineEdit *>(QStringLiteral("lineEdit_path")))
+                    path->setText(importArgs[0]);
+                if (auto *name = w->findChild<QLineEdit *>(QStringLiteral("lineEdit_tablename")))
+                    name->setText(importArgs[1]);
+                QTimer::singleShot(1500, w, []() {
+                    if (auto *d = qobject_cast<QDialog *>(QApplication::activeModalWidget()))
+                        d->accept();
+                });
+                QMetaObject::invokeMethod(w, "on_pushButton_confirm_clicked", Qt::DirectConnection);
+            }
         });
     }
     // WHUMAG_TEST_MERGE=file1|sigma1,file2|sigma2 fills the file table of the data-fusion form

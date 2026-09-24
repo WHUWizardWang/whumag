@@ -1,6 +1,7 @@
 #include "importform.h"
 #include "ui_importform.h"
 
+#include "dataimportdialog.h"
 #include "formkit.h"
 #include "uiscale.h"
 
@@ -8,6 +9,8 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QTemporaryDir>
+#include <QApplication>
 
 ImportForm::ImportForm(QWidget *parent) :
     QWidget(parent),
@@ -34,7 +37,7 @@ void ImportForm::buildLayout()
     }
 
     setWindowTitle(tr("导入数据"));
-    resize(UiScale::windowSize(600, 440));
+    resize(UiScale::windowSize(620, 480));
     setMinimumWidth(UiScale::dp(520));
 
     auto *root = new QVBoxLayout;
@@ -43,13 +46,25 @@ void ImportForm::buildLayout()
     root->addWidget(FormKit::header(QStringLiteral("import"), tr("导入数据"), tr("把测线数据文件加入当前工程")));
 
     // file
-    ui->lineEdit_path->setPlaceholderText(tr("选择 .txt 或 .dat 数据文件"));
+    ui->lineEdit_path->setPlaceholderText(tr("选择 txt / csv / dat / cdf / nc 数据文件"));
     ui->pushButton_choose->setText(tr("选择文件…"));
     auto *pathRow = new QHBoxLayout;
     pathRow->setSpacing(8);
     pathRow->addWidget(ui->lineEdit_path, 1);
     pathRow->addWidget(ui->pushButton_choose);
-    root->addLayout(FormKit::field(tr("数据文件"), pathRow, tr("每行一个点：经度 纬度 磁场值，以空格分隔。")));
+    root->addLayout(FormKit::field(tr("数据文件"), pathRow,
+                                   tr("文本文件可用任意分隔符，也支持 NASA CDF（如卫星磁测数据）和 netCDF classic；"
+                                      "选择文件后设置分隔方式和各列的含义。")));
+    formatSummary_ = FormKit::hint(tr("尚未设置数据格式"));
+    formatButton_ = new QPushButton(tr("格式与列设置…"));
+    formatButton_->setEnabled(false);
+    connect(formatButton_, &QPushButton::clicked, this, [this]() { chooseFormat(); });
+    auto *formatRow = new QHBoxLayout;
+    formatRow->setSpacing(8);
+    formatRow->addWidget(formatSummary_, 1);
+    formatRow->addWidget(formatButton_, 0, Qt::AlignTop);
+    root->addLayout(formatRow);
+    connect(ui->lineEdit_path, &QLineEdit::textEdited, this, [this]() { resetFormat(); });
 
     // data type / platform side by side
     auto *pair = new QHBoxLayout;
@@ -118,52 +133,42 @@ bool ImportForm::appendTextToFile(const QString &textToAdd)
     return true;
 }
 
-void ImportForm::openData(QString filePath,double &xmin,double &xmax,double &ymin,double &ymax)
+void ImportForm::resetFormat()
 {
-    QVector<double> xx,yy,vv;
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-           return;
-    QTextStream in(&file);
-    while (!in.atEnd())
-    {
-        QString line = in.readLine();
-        QStringList fields = line.split(" "); // 假设CSV字段由逗号分隔
-        if (fields.size() < 3)
-                continue;
-        bool okX, okY, okValue;
-        double x = fields[0].toDouble(&okX);
-        double y = fields[1].toDouble(&okY);
-        double value = fields[2].toDouble(&okValue);
+    formatPath_.clear();
+    formatSummary_->setText(tr("尚未设置数据格式"));
+    formatButton_->setEnabled(!ui->lineEdit_path->text().trimmed().isEmpty());
+}
 
-        if (!okX || !okY || !okValue)
-                continue;
-        xx.append(x);
-        yy.append(y);
-        vv.append(value);
-    }
-    file.close();
-    if (xx.isEmpty() || yy.isEmpty())
+bool ImportForm::chooseFormat()
+{
+    const QString path = ui->lineEdit_path->text().trimmed();
+    if (path.isEmpty() || !QFileInfo::exists(path))
     {
-        QMessageBox::warning(this, "警告", "所选文件未包含可解析的数据行");
-        xmin = xmax = ymin = ymax = 0.0;
-        return;
+        QMessageBox::warning(this, "警告", "请选择一个存在的数据文件");
+        return false;
     }
-    xmin = *std::min_element(std::begin(xx),std::end(xx));
-    xmax = *std::max_element(std::begin(xx),std::end(xx));
-    ymin = *std::min_element(std::begin(yy),std::end(yy));
-    ymax = *std::max_element(std::begin(yy),std::end(yy));
+    DataImportDialog dialog(path, formatPath_ == path ? importSettings_ : DataIO::ImportSettings(), this);
+    if (dialog.exec() != QDialog::Accepted)
+        return false;
+    importSettings_ = dialog.settings();
+    formatPath_ = path;
+    formatSummary_->setText(dialog.summary());
+    return true;
 }
 
 void ImportForm::on_pushButton_choose_clicked()
 {
-    QString filePath = QFileDialog::getOpenFileName(this, "选择文件", QDir::homePath(), "文本文件 (*.txt);;数据文件 (*.dat)");
-    if (!filePath.isEmpty())
-    {
-        ui->lineEdit_path->setText(filePath);
-        if (ui->lineEdit_tablename->text().trimmed().isEmpty())
-            ui->lineEdit_tablename->setText(QFileInfo(filePath).completeBaseName());   // sensible default name
-    }
+    const QString filePath = QFileDialog::getOpenFileName(this, "选择文件", QDir::homePath(),
+        "数据文件 (*.txt *.csv *.dat *.xyz *.cdf *.nc *.grd);;文本文件 (*.txt *.csv *.dat *.xyz);;"
+        "CDF / netCDF (*.cdf *.nc *.grd);;所有文件 (*)");
+    if (filePath.isEmpty())
+        return;
+    ui->lineEdit_path->setText(filePath);
+    if (ui->lineEdit_tablename->text().trimmed().isEmpty())
+        ui->lineEdit_tablename->setText(QFileInfo(filePath).completeBaseName());   // sensible default name
+    resetFormat();
+    chooseFormat();
 }
 
 
@@ -177,47 +182,63 @@ void ImportForm::on_pushButton_confirm_clicked()
     }
     TableName = "real_"+TableName;
 
-    QString filePath = ui->lineEdit_path->text();
+    QString filePath = ui->lineEdit_path->text().trimmed();
     if(filePath.isEmpty() || !QFileInfo::exists(filePath))
     {
         QMessageBox::warning(this,"警告","请选择一个存在的数据文件");
         return;
     }
-    QFileInfo fileinfo = QFileInfo(filePath);
-    // 文件后缀
-    QString file_suffix = fileinfo.suffix();
-    file_suffix="."+file_suffix;
-    // 文件名
-    QString file_name = fileinfo.fileName();
-    file_name.replace(file_name.size()-file_suffix.size(),file_suffix.size(),"");
-    // 绝对路径
-    QString file_path = fileinfo.absolutePath();
-    //
-    TableName = TableName+file_suffix;
+    if (QFileInfo::exists(projectPath + "/Measured/" + TableName + ".txt"))
+    {
+        QMessageBox::warning(this, "警告", QString("工程中已有名为 %1 的数据，请换一个名称").arg(TableName));
+        ui->lineEdit_tablename->setFocus();
+        return;
+    }
+    if (formatPath_ != filePath && !chooseFormat())
+        return;
+
+    // the file is converted to the program's format ("x y value" per line) and then added to the project
+    QTemporaryDir tmp;
+    const QString converted = tmp.filePath("import.txt");
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const DataIO::ImportResult r = DataIO::importToXyz(filePath, importSettings_, converted);
+    QApplication::restoreOverrideCursor();
+    if (!r.ok())
+    {
+        QMessageBox::warning(this, "导入失败", r.error);
+        return;
+    }
+    TableName += ".txt";
     double dx = ui->doubleSpinBox_x->value();
     double dy = ui->doubleSpinBox_y->value();
-    QDateTime currentDateTime = QDateTime::currentDateTime();
-    QString dateTimeString = currentDateTime.toString("yyyy-MM-dd HH:mm:ss");  // 转换为字符串形式
-    double xmin,xmax,ymin,ymax;
-    openData(filePath,xmin,xmax,ymin,ymax);
+    const QString dateTimeString = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
     appendTextToFile(QString::number(ui->comboBox_datatype->currentIndex()) + " "
                      + TableName + " "
                      + filePath + " "
                      + dateTimeString + " "
-                     + QString::number(xmin) + " "
-                     + QString::number(xmax) + " "
-                     + QString::number(ymin) + " "
-                     + QString::number(ymax) + " "
+                     + QString::number(r.xMin) + " "
+                     + QString::number(r.xMax) + " "
+                     + QString::number(r.yMin) + " "
+                     + QString::number(r.yMax) + " "
                      + QString::number(ui->comboBox_platform->currentIndex()));
-    // 传输参数
-    inputReceived(TableName,fileinfo.absoluteFilePath(),dx,dy);
-    emit textUpdated("数据 "+TableName+" 已成功导入至工程!");
+    // 传输参数（主窗口把转换后的文件复制到工程的 Measured 目录）
+    inputReceived(TableName, converted, dx, dy);
+    QString msg = QString("数据 %1 已导入：%2 个点").arg(TableName).arg(r.written);
+    if (r.skipped > 0)
+        msg += QString("，跳过 %1 行（%2）").arg(r.skipped).arg(r.skippedExamples.join("；"));
+    emit textUpdated(msg);
+    for (const QString &note : r.notes)
+        emit textUpdated("  " + note);
+    if (r.skipped > r.written)
+        QMessageBox::warning(this, "跳过的行较多", QString("导入 %1 个点，跳过 %2 行。如果不是文件本身缺少数据（填充值），请检查列设置。\n%3")
+                                                       .arg(r.written).arg(r.skipped).arg(r.skippedExamples.join("\n")));
     QCoreApplication::processEvents();
     // 加入数据库
     if (!ui->checkBox->isChecked())
     {
         ui->lineEdit_path->clear();          // the next import starts from an empty form
         ui->lineEdit_tablename->clear();
+        resetFormat();
         close();
         return;
     }

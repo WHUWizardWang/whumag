@@ -8,6 +8,10 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <QDateTime>
+#include "dataio/tableimport.h"
+
+class QLabel;
+class QPushButton;
 
 namespace Ui {
 class ImportForm;
@@ -38,7 +42,13 @@ private:
     Ui::ImportForm *ui;
     void buildLayout();
     bool appendTextToFile(const QString &textToAdd);
-    void openData(QString filePath,double &xmin,double &xmax,double &ymin,double &ymax);
+    bool chooseFormat();          // opens the format / column dialog for the current file
+    void resetFormat();
+
+    DataIO::ImportSettings importSettings_;
+    QString formatPath_;          // file the settings belong to (empty: not set yet)
+    QLabel *formatSummary_ = nullptr;
+    QPushButton *formatButton_ = nullptr;
 
 
 };
